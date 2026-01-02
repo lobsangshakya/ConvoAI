@@ -83,7 +83,11 @@ def startup_event():
         def kafka_consumer_loop():
             def handle_response_message(message_data):
                 # Broadcast the response to all connected WebSocket clients
-                asyncio.run(manager.broadcast(json.dumps(message_data)))
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(manager.broadcast(json.dumps(message_data)))
+                loop.close()
                 
                 # Also save to database
                 db = SessionLocal()
@@ -138,7 +142,7 @@ async def send_message(request: MessageRequest):
                 'timestamp': time.time(),
                 'source': 'simulator'
             }
-            asyncio.run(manager.broadcast(json.dumps(simulated_message_data)))
+            await manager.broadcast(json.dumps(simulated_message_data))
             
             # Save to database
             db = SessionLocal()
