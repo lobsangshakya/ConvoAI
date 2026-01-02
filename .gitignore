@@ -51,3 +51,7 @@ frontend/build/
 backend/__pycache__/
 llm/__pycache__/
 rl_agent/__pycache__/
+
+# Database files
+*.db
+chatbot.db
