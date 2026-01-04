@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 from .kafka_producer import get_kafka_producer
 from .kafka_consumer import KafkaConsumerService
 from .database import get_db, SessionLocal
@@ -18,6 +20,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Chatbot Backend", description="Backend API for AI-powered chatbot")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 # Database dependency
 
@@ -65,12 +76,20 @@ class ConnectionManager:
         await websocket.send_text(message)
 
     async def broadcast(self, message: str):
+        disconnected_connections = []
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
-            except:
-                # If sending fails, remove the connection
+            except Exception as e:
+                logger.error(f"Error sending message to WebSocket connection: {str(e)}")
+                disconnected_connections.append(connection)
+        
+        # Remove disconnected connections
+        for connection in disconnected_connections:
+            try:
                 self.active_connections.remove(connection)
+            except ValueError:
+                pass  # Connection already removed
 
 
 manager = ConnectionManager()
@@ -83,7 +102,11 @@ def startup_event():
         def kafka_consumer_loop():
             def handle_response_message(message_data):
                 # Broadcast the response to all connected WebSocket clients
-                asyncio.run(manager.broadcast(json.dumps(message_data)))
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(manager.broadcast(json.dumps(message_data)))
+                loop.close()
                 
                 # Also save to database
                 db = SessionLocal()
@@ -94,7 +117,7 @@ def startup_event():
                         session_id=message_data.get('session_id', 'unknown'),
                         user_message=message_data.get('original_message', ''),
                         bot_response=message_data.get('llm_response', '') or message_data.get('suggested_response', ''),
-                        timestamp=time.time()
+                        timestamp=datetime.fromtimestamp(time.time())
                     )
                     db.add(chat_log)
                     db.commit()
@@ -126,10 +149,12 @@ async def send_message(request: MessageRequest):
         
         # In local mode, we simulate the response
         if LOCAL_MODE:
+            logger.info(f"Processing message in local mode: {request.message}")
             # Simulate a response after a short delay
             simulated_response = f"Simulated response to: {request.message}"
             
             # Broadcast to WebSocket clients
+            current_timestamp = datetime.fromtimestamp(time.time())
             simulated_message_data = {
                 'user_id': request.user_id,
                 'session_id': request.session_id,
@@ -138,7 +163,8 @@ async def send_message(request: MessageRequest):
                 'timestamp': time.time(),
                 'source': 'simulator'
             }
-            asyncio.run(manager.broadcast(json.dumps(simulated_message_data)))
+            logger.info(f"Broadcasting simulated response: {simulated_response}")
+            await manager.broadcast(json.dumps(simulated_message_data))
             
             # Save to database
             db = SessionLocal()
@@ -149,7 +175,7 @@ async def send_message(request: MessageRequest):
                     session_id=request.session_id,
                     user_message=request.message,
                     bot_response=simulated_response,
-                    timestamp=time.time()
+                    timestamp=datetime.fromtimestamp(time.time())
                 )
                 db.add(chat_log)
                 db.commit()
@@ -172,7 +198,7 @@ async def send_message(request: MessageRequest):
                     session_id=request.session_id,
                     user_message=request.message,
                     bot_response="",  # Will be filled when response comes
-                    timestamp=time.time()
+                    timestamp=datetime.fromtimestamp(time.time())
                 )
                 db.add(chat_log)
                 db.commit()
