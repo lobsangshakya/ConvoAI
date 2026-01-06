@@ -100,13 +100,9 @@ def startup_event():
     # Start Kafka consumer to listen for responses from RL agent and LLM
     if not LOCAL_MODE:
         def kafka_consumer_loop():
-            def handle_response_message(message_data):
+            async def handle_response_message_async(message_data):
                 # Broadcast the response to all connected WebSocket clients
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(manager.broadcast(json.dumps(message_data)))
-                loop.close()
+                await manager.broadcast(json.dumps(message_data))
                 
                 # Also save to database
                 db = SessionLocal()
@@ -125,6 +121,18 @@ def startup_event():
                     logger.error(f'Error saving chat log: {str(e)}')
                 finally:
                     db.close()
+            
+            def handle_response_message(message_data):
+                # Run the async function in the asyncio event loop
+                import asyncio
+                try:
+                    # Get the running event loop if available
+                    loop = asyncio.get_running_loop()
+                    # Schedule the coroutine in the existing loop
+                    asyncio.run_coroutine_threadsafe(handle_response_message_async(message_data), loop)
+                except RuntimeError:
+                    # No event loop running, create a new one
+                    asyncio.run(handle_response_message_async(message_data))
             
             consumer_service = KafkaConsumerService()
             consumer_service.start_consuming(['llm-responses', 'rl-responses'], handle_response_message)
@@ -151,22 +159,40 @@ async def send_message(request: MessageRequest):
         if LOCAL_MODE:
             logger.info(f"Processing message in local mode: {request.message}")
             # Simulate a response after a short delay
-            simulated_response = f"Simulated response to: {request.message}"
+            # Create a more natural and helpful response
+            user_msg = request.message.lower().strip()
             
-            # Broadcast to WebSocket clients
-            current_timestamp = datetime.fromtimestamp(time.time())
-            simulated_message_data = {
-                'user_id': request.user_id,
-                'session_id': request.session_id,
-                'original_message': request.message,
-                'llm_response': simulated_response,
-                'timestamp': time.time(),
-                'source': 'simulator'
-            }
-            logger.info(f"Broadcasting simulated response: {simulated_response}")
-            await manager.broadcast(json.dumps(simulated_message_data))
+            # Check for greetings first - match whole words or start of sentence
+            if any(user_msg.startswith(greeting) or f' {greeting} ' in f' {user_msg} ' or user_msg.endswith(f' {greeting}') for greeting in ["hello", "hi", "hey"]):
+                simulated_response = "Hello there! How can I assist you today?"
+            elif "help" in user_msg and not any(word in user_msg for word in ["something", "anything"]):
+                simulated_response = "I'm here to help! You can ask me questions or have a conversation about various topics."
+            elif "thank" in user_msg or "thanks" in user_msg:
+                simulated_response = "You're welcome! Is there anything else I can help with?"
+            elif any(bye_word in user_msg for bye_word in ["bye", "goodbye"]):
+                simulated_response = "Goodbye! Feel free to come back if you have more questions."
+            else:
+                # Generate a more contextually relevant response
+                user_msg_lower = user_msg.lower()
+                if "llm" in user_msg_lower or "large language model" in user_msg_lower:
+                    simulated_response = "A Large Language Model (LLM) is an AI model that understands and generates human-like text based on vast amounts of training data. Examples include GPT, Claude, and Llama."
+                elif "ai" in user_msg_lower or "artificial intelligence" in user_msg_lower:
+                    simulated_response = "Artificial Intelligence (AI) refers to computer systems designed to perform tasks that typically require human intelligence, such as understanding language, recognizing patterns, and making decisions."
+                elif "chatbot" in user_msg_lower or "bot" in user_msg_lower:
+                    simulated_response = "A chatbot is an AI program designed to simulate conversation with humans through text or voice interactions. This system is an AI-powered chatbot with reinforcement learning capabilities."
+                elif any(word in user_msg_lower for word in ["name", "call", "you"]):
+                    simulated_response = "I'm an AI assistant powered by advanced language models. You can ask me questions or have a conversation about various topics."
+                elif any(word in user_msg_lower for word in ["weather", "temperature", "rain", "sunny"]):
+                    simulated_response = "I don't have access to real-time weather data in local mode, but I can help you find weather information if connected to the appropriate services."
+                elif any(word in user_msg_lower for word in ["time", "date", "today"]):
+                    now = datetime.now()
+                    simulated_response = f"The current date and time is {now.strftime('%Y-%m-%d %H:%M:%S')}. In a full implementation, I would provide more contextually aware responses."
+                else:
+                    # Default response with more helpful content
+                    simulated_response = f"Thanks for asking about '{request.message}'! In a full implementation with active AI models, I would provide a detailed and accurate response. This is a simulated response in local development mode."
+
             
-            # Save to database
+            # Save to database first
             db = SessionLocal()
             try:
                 # Create a chat log entry
@@ -184,6 +210,22 @@ async def send_message(request: MessageRequest):
             finally:
                 db.close()
             
+            # Prepare message data for WebSocket
+            current_timestamp = datetime.fromtimestamp(time.time())
+            simulated_message_data = {
+                'user_id': request.user_id,
+                'session_id': request.session_id,
+                'original_message': request.message,
+                'llm_response': simulated_response,
+                'timestamp': time.time(),
+                'source': 'simulator'
+            }
+            logger.info(f"Broadcasting simulated response: {simulated_response}")
+            
+            # Broadcast to WebSocket clients
+            await manager.broadcast(json.dumps(simulated_message_data))
+            
+            # Return the response immediately
             return ChatResponse(response=simulated_response, timestamp=time.time())
         else:
             # Send to Kafka topic

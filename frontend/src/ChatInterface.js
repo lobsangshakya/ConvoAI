@@ -22,15 +22,25 @@ const ChatInterface = () => {
       const data = JSON.parse(event.data);
       
       // Add response to messages
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          text: data.llm_response || data.suggested_response,
-          sender: 'bot',
-          timestamp: new Date(data.timestamp * 1000).toLocaleTimeString()
+      const newMessage = {
+        id: Date.now(),
+        text: data.llm_response || data.suggested_response,
+        sender: 'bot',
+        timestamp: new Date(data.timestamp * 1000).toLocaleTimeString()
+      };
+      
+      // Check if this message already exists to avoid duplicates
+      setMessages(prev => {
+        const isDuplicate = prev.some(msg => 
+          msg.text === newMessage.text && 
+          msg.sender === newMessage.sender
+        );
+        
+        if (!isDuplicate) {
+          return [...prev, newMessage];
         }
-      ]);
+        return prev;
+      });
     };
     
     socket.onclose = () => {
@@ -85,6 +95,29 @@ const ChatInterface = () => {
       
       const result = await response.json();
       console.log('Message sent:', result);
+      
+      // In local mode, the API returns the response directly
+      // Add the response to the messages immediately if it's not already handled by WebSocket
+      if (result && result.response) {
+        const newMessage = {
+          id: Date.now() + 1, // Ensure unique ID
+          text: result.response,
+          sender: 'bot',
+          timestamp: new Date(result.timestamp * 1000).toLocaleTimeString()
+        };
+        
+        // Check if we already received this response via WebSocket to avoid duplicates
+        setMessages(prev => {
+          const isDuplicate = prev.some(msg => 
+            msg.text === newMessage.text && msg.sender === 'bot'
+          );
+          
+          if (!isDuplicate) {
+            return [...prev, newMessage];
+          }
+          return prev;
+        });
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       
