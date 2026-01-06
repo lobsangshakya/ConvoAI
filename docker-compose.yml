@@ -21,16 +21,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
-  db:
-    image: postgres:13
-    environment:
-      POSTGRES_DB: chatbot_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+  # db service removed for local mode - using SQLite instead
 
   backend:
     build: ./backend
@@ -38,9 +29,10 @@ services:
       - "8000:8000"
     depends_on:
       - kafka
-      - db
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/chatbot_db
+      - LOCAL_MODE=true
+      - DB_TYPE=sqlite
+      - DATABASE_URL=sqlite:///./chatbot.db
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     volumes:
       - ./backend:/app
