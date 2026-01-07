@@ -1,5 +1,6 @@
 import os
 import openai
+from openai import OpenAI
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
 import torch
 from typing import Optional
@@ -41,7 +42,8 @@ class ModelHandler:
     def _generate_with_openai(self, prompt: str) -> str:
         """Generate response using OpenAI API"""
         try:
-            response = openai.ChatCompletion.create(
+            client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            response = client.chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant for a chatbot application. Respond to the user's message."},
@@ -50,7 +52,7 @@ class ModelHandler:
                 max_tokens=150,
                 temperature=0.7
             )
-            return response.choices[0].message['content'].strip()
+            return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f'Error generating response with OpenAI: {str(e)}')
             return self._fallback_response(prompt)

@@ -8,7 +8,7 @@ services:
       - "2181:2181"
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.0.1
     depends_on:
       - zookeeper
     ports:
@@ -16,8 +16,13 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
@@ -30,10 +35,13 @@ services:
     depends_on:
       - kafka
     environment:
-      - LOCAL_MODE=true
+      - LOCAL_MODE=false
       - DB_TYPE=sqlite
       - DATABASE_URL=sqlite:///./chatbot.db
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-4
+      - USE_OPENAI=true
     volumes:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -72,9 +80,9 @@ services:
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - HF_MODEL=gpt2
-      - USE_OPENAI=false
-      # Add OPENAI_API_KEY if using OpenAI
-      # - OPENAI_API_KEY=your_openai_key_here
+      - USE_OPENAI=true
+      - OPENAI_MODEL=gpt-4
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./llm:/app
     command: python -m app.llm_service

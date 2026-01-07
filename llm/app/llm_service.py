@@ -18,18 +18,38 @@ class LLMService:
         
     def start_listening(self):
         """Start listening for messages from Kafka"""
-        self.consumer = KafkaConsumer(
-            'chat-messages',
-            bootstrap_servers=self.kafka_bootstrap_servers,
-            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            auto_offset_reset='earliest',
-            group_id='llm_service_group'
-        )
+        # Attempt to connect to Kafka with retries
+        max_retries = 30
+        retry_count = 0
         
-        self.producer = KafkaProducer(
-            bootstrap_servers=self.kafka_bootstrap_servers,
-            value_serializer=lambda v: json.dumps(v).encode('utf-8')
-        )
+        while retry_count < max_retries:
+            try:
+                self.consumer = KafkaConsumer(
+                    'chat-messages',
+                    bootstrap_servers=os.getenv('KAFKA_BOOTSTRAP_SERVERS', self.kafka_bootstrap_servers),
+                    value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                    auto_offset_reset='earliest',
+                    group_id='llm_service_group',
+                    consumer_timeout_ms=10000,
+                    request_timeout_ms=30000,
+                    max_poll_interval_ms=300000  # 5 minutes
+                )
+                
+                self.producer = KafkaProducer(
+                    bootstrap_servers=os.getenv('KAFKA_BOOTSTRAP_SERVERS', self.kafka_bootstrap_servers),
+                    value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+                    request_timeout_ms=30000
+                )
+                
+                logger.info('LLM Service successfully connected to Kafka')
+                break
+            except Exception as e:
+                retry_count += 1
+                logger.warning(f'Failed to connect to Kafka (attempt {retry_count}/{max_retries}): {str(e)}')
+                if retry_count >= max_retries:
+                    logger.error('Max retries reached. LLM service cannot connect to Kafka. Exiting.')
+                    return  # Exit if unable to connect after retries
+                time.sleep(10)  # Wait 10 seconds before retry
         
         logger.info('LLM Service started listening for messages')
         
