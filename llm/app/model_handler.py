@@ -41,6 +41,11 @@ class ModelHandler:
     def _generate_with_openai(self, prompt: str) -> str:
         """Generate response using OpenAI API"""
         try:
+            # Check if API key is set
+            if not os.getenv('OPENAI_API_KEY'):
+                logger.warning('OpenAI API key not set. Using fallback response.')
+                return self._fallback_response(prompt)
+            
             response = openai.ChatCompletion.create(
                 model=self.model_name,
                 messages=[
@@ -51,6 +56,18 @@ class ModelHandler:
                 temperature=0.7
             )
             return response.choices[0].message['content'].strip()
+        except openai.error.AuthenticationError:
+            logger.error('OpenAI Authentication Error: Invalid API key')
+            return "I'm sorry, but there's an issue with the AI service configuration. Please check the API key."
+        except openai.error.RateLimitError:
+            logger.error('OpenAI Rate Limit Error: Too many requests')
+            return "I'm currently experiencing high demand. Please try again in a moment."
+        except openai.error.APIConnectionError:
+            logger.error('OpenAI API Connection Error: Unable to connect to the service')
+            return "I'm having trouble connecting to the AI service. Please try again later."
+        except openai.error.APIError as e:
+            logger.error(f'OpenAI API Error: {str(e)}')
+            return "I'm having trouble processing your request. Please try again."
         except Exception as e:
             logger.error(f'Error generating response with OpenAI: {str(e)}')
             return self._fallback_response(prompt)

@@ -16,12 +16,14 @@ The system consists of:
 
 - Docker
 - Docker Compose
+- OpenAI API key (optional, for using GPT models)
 
 ## Setup Instructions
 
 1. Clone the repository
 2. Navigate to the project directory
-3. Run the application using Docker Compose:
+3. Create a `.env` file with your OpenAI API key (see Configuration section below)
+4. Run the application using Docker Compose:
 
 ```bash
 docker-compose up --build
@@ -36,9 +38,24 @@ The application will be available at:
 ### Environment Variables
 
 For the LLM service, you can configure:
+
 - `USE_OPENAI`: Set to `true` to use OpenAI API (default: `false`)
 - `OPENAI_API_KEY`: Your OpenAI API key (required if USE_OPENAI=true)
+- `OPENAI_MODEL`: OpenAI model to use (default: `gpt-3.5-turbo`)
 - `HF_MODEL`: Hugging Face model to use (default: `gpt2`)
+- `LOCAL_MODE`: Set to `false` to use the full Kafka pipeline (default: `false`)
+
+To use OpenAI GPT models, create a `.env` file in the project root with your API key:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+USE_OPENAI=true
+OPENAI_MODEL=gpt-4
+HF_MODEL=gpt2
+LOCAL_MODE=false
+```
+
+The application is configured to automatically use the settings from the `.env` file. Simply place your OpenAI API key in the `.env` file and run the application normally with `docker-compose up --build`.
 
 ### Kafka Topics
 
@@ -76,6 +93,18 @@ The LLM service:
 - Consumes messages from the `chat-messages` topic
 - Generates human-like responses using either OpenAI or Hugging Face models
 - Publishes results to the `llm-responses` topic
+
+## How It Works
+
+1. User sends a message through the React frontend
+2. Frontend sends the message to the backend via REST API
+3. Backend publishes the message to the `chat-messages` Kafka topic
+4. Both RL Agent and LLM Service consume the message
+5. RL Agent calculates a reward and generates a response suggestion
+6. LLM Service generates a response using the language model (now using OpenAI GPT when configured)
+7. Both services publish their responses to their respective Kafka topics
+8. Backend consumes responses from Kafka and broadcasts them via WebSocket
+9. Frontend receives the response in real-time and displays it
 
 ## Development
 
@@ -138,18 +167,6 @@ ChatBot/
 └── README.md
 ```
 
-## How It Works
-
-1. User sends a message through the React frontend
-2. Frontend sends the message to the backend via REST API
-3. Backend publishes the message to the `chat-messages` Kafka topic
-4. Both RL Agent and LLM Service consume the message
-5. RL Agent calculates a reward and generates a response suggestion
-6. LLM Service generates a response using the language model
-7. Both services publish their responses to their respective Kafka topics
-8. Backend consumes responses from Kafka and broadcasts them via WebSocket
-9. Frontend receives the response in real-time and displays it
-
 ## Technologies Used
 
 - **Backend**: FastAPI, SQLAlchemy, Kafka
@@ -158,5 +175,16 @@ ChatBot/
 - **LLM**: Transformers, PyTorch, OpenAI API
 - **Database**: PostgreSQL
 - **Message Broker**: Apache Kafka
-- **Containerization**: Docker, Docker Compose# ConvoAI
-# ConvoAI
+- **Containerization**: Docker, Docker Compose
+
+## Troubleshooting
+
+- If you see "Sorry, there was an error sending your message", check:
+  - That your OpenAI API key is correctly set (if using OpenAI)
+  - That all Docker services are running (`docker-compose ps`)
+  - That the backend can connect to Kafka
+  - Check the logs of each service: `docker logs <container_name>`
+
+## License
+
+MIT License

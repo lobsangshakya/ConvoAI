@@ -11,7 +11,9 @@ class KafkaProducerService:
         self.producer = KafkaProducer(
             bootstrap_servers=bootstrap_servers,
             value_serializer=lambda v: json.dumps(v).encode('utf-8'),
-
+            security_protocol='PLAINTEXT',
+            api_version_auto=True,
+            retries=3
         )
 
     def send_message(self, topic: str, message: Dict[str, Any]):

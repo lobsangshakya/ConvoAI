@@ -121,12 +121,21 @@ const ChatInterface = () => {
     } catch (error) {
       console.error('Error sending message:', error);
       
-      // Add error message to UI
+      // Add error message to UI with more specific details
+      let errorMessage;
+      if (error.message.includes('404')) {
+        errorMessage = 'Server is not responding. Please make sure the backend is running on http://localhost:8000.';
+      } else if (error.message.includes('ECONNREFUSED')) {
+        errorMessage = 'Cannot connect to the server. Please check if the backend service is running.';
+      } else {
+        errorMessage = `Sorry, there was an error sending your message: ${error.message || 'Unknown error occurred'}`;
+      }
+      
       setMessages(prev => [
         ...prev,
         {
           id: Date.now(),
-          text: 'Sorry, there was an error sending your message. Please try again.',
+          text: errorMessage,
           sender: 'system',
           timestamp: new Date().toLocaleTimeString()
         }

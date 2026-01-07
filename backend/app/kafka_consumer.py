@@ -14,7 +14,9 @@ class KafkaConsumerService:
             group_id=group_id,
             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
             auto_offset_reset='earliest',
-
+            security_protocol='PLAINTEXT',
+            api_version_auto=True,
+            consumer_timeout_ms=1000
         )
         self.running = False
         self.thread = None
