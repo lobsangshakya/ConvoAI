@@ -7,6 +7,8 @@ import json
 import logging
 import os
 from datetime import datetime
+from dotenv import load_dotenv
+import openai
 from .kafka_producer import get_kafka_producer
 from .kafka_consumer import KafkaConsumerService
 from .database import get_db, SessionLocal
@@ -14,6 +16,9 @@ from . import models, schemas
 from sqlalchemy.orm import Session
 import threading
 import time
+
+# Load environment variables
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +47,45 @@ def get_db():
 
 # Check if running in local mode (without Kafka)
 LOCAL_MODE = os.getenv("LOCAL_MODE", "false").lower() == "true"
+
+
+def call_openai_directly(prompt: str) -> str:
+    """Directly call OpenAI API from the backend as a fallback"""
+    try:
+        # Check if API key is set
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            logging.warning('OpenAI API key not set in backend.')
+            return "I'm sorry, but the AI service is not properly configured. Please check that the API key is set."
+        
+        openai.api_key = api_key
+        model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant for a chatbot application. Respond to the user's message."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=150,
+            temperature=0.7
+        )
+        return response.choices[0].message['content'].strip()
+    except openai.error.AuthenticationError:
+        logging.error('OpenAI Authentication Error: Invalid API key in backend')
+        return "I'm sorry, but there's an issue with the AI service configuration. Please check the API key."
+    except openai.error.RateLimitError:
+        logging.error('OpenAI Rate Limit Error in backend')
+        return "I'm currently experiencing high demand. Please try again in a moment."
+    except openai.error.APIConnectionError:
+        logging.error('OpenAI API Connection Error in backend')
+        return "I'm having trouble connecting to the AI service. Please try again later."
+    except openai.error.APIError as e:
+        logging.error(f'OpenAI API Error in backend: {str(e)}')
+        return "I'm having trouble processing your request. Please try again."
+    except Exception as e:
+        logging.error(f'Error calling OpenAI from backend: {str(e)}')
+        return "I'm having trouble connecting to the AI service right now. Please try again later."
 
 
 # Models for API requests
@@ -100,42 +144,45 @@ def startup_event():
     # Start Kafka consumer to listen for responses from RL agent and LLM
     if not LOCAL_MODE:
         def kafka_consumer_loop():
-            async def handle_response_message_async(message_data):
-                # Broadcast the response to all connected WebSocket clients
-                await manager.broadcast(json.dumps(message_data))
+            try:
+                async def handle_response_message_async(message_data):
+                    # Broadcast the response to all connected WebSocket clients
+                    await manager.broadcast(json.dumps(message_data))
+                    
+                    # Also save to database
+                    db = SessionLocal()
+                    try:
+                        # Create a chat log entry
+                        chat_log = models.ChatLog(
+                            user_id=message_data.get('user_id', 'unknown'),
+                            session_id=message_data.get('session_id', 'unknown'),
+                            user_message=message_data.get('original_message', ''),
+                            bot_response=message_data.get('llm_response', '') or message_data.get('suggested_response', ''),
+                            timestamp=datetime.fromtimestamp(time.time())
+                        )
+                        db.add(chat_log)
+                        db.commit()
+                    except Exception as e:
+                        logger.error(f'Error saving chat log: {str(e)}')
+                    finally:
+                        db.close()
                 
-                # Also save to database
-                db = SessionLocal()
-                try:
-                    # Create a chat log entry
-                    chat_log = models.ChatLog(
-                        user_id=message_data.get('user_id', 'unknown'),
-                        session_id=message_data.get('session_id', 'unknown'),
-                        user_message=message_data.get('original_message', ''),
-                        bot_response=message_data.get('llm_response', '') or message_data.get('suggested_response', ''),
-                        timestamp=datetime.fromtimestamp(time.time())
-                    )
-                    db.add(chat_log)
-                    db.commit()
-                except Exception as e:
-                    logger.error(f'Error saving chat log: {str(e)}')
-                finally:
-                    db.close()
-            
-            def handle_response_message(message_data):
-                # Run the async function in the asyncio event loop
-                import asyncio
-                try:
-                    # Get the running event loop if available
-                    loop = asyncio.get_running_loop()
-                    # Schedule the coroutine in the existing loop
-                    asyncio.run_coroutine_threadsafe(handle_response_message_async(message_data), loop)
-                except RuntimeError:
-                    # No event loop running, create a new one
-                    asyncio.run(handle_response_message_async(message_data))
-            
-            consumer_service = KafkaConsumerService()
-            consumer_service.start_consuming(['llm-responses', 'rl-responses'], handle_response_message)
+                def handle_response_message(message_data):
+                    # Run the async function in the asyncio event loop
+                    import asyncio
+                    try:
+                        # Get the running event loop if available
+                        loop = asyncio.get_running_loop()
+                        # Schedule the coroutine in the existing loop
+                        asyncio.run_coroutine_threadsafe(handle_response_message_async(message_data), loop)
+                    except RuntimeError:
+                        # No event loop running, create a new one
+                        asyncio.run(handle_response_message_async(message_data))
+                
+                consumer_service = KafkaConsumerService()
+                consumer_service.start_consuming(['llm-responses', 'rl-responses'], handle_response_message)
+            except Exception as e:
+                logger.error(f'Error initializing Kafka consumer: {str(e)}. Running in degraded mode.')
         
         # Run Kafka consumer in a separate thread
         consumer_thread = threading.Thread(target=kafka_consumer_loop, daemon=True)
@@ -228,9 +275,47 @@ async def send_message(request: MessageRequest):
             # Return the response immediately
             return ChatResponse(response=simulated_response, timestamp=time.time())
         else:
-            # Send to Kafka topic
-            producer = get_kafka_producer()
-            producer.send_message('chat-messages', message_data)
+            try:
+                # Send to Kafka topic
+                producer = get_kafka_producer()
+                producer.send_message('chat-messages', message_data)
+            except Exception as e:
+                logger.error(f'Error sending message to Kafka: {str(e)}. Falling back to direct OpenAI call.')
+                # Fallback to direct OpenAI API call if Kafka is unavailable
+                try:
+                    direct_response = call_openai_directly(request.message)
+                except Exception as openai_error:
+                    logger.error(f'Direct OpenAI call also failed: {str(openai_error)}')
+                    # If both Kafka and OpenAI fail, return a meaningful error
+                    direct_response = "I'm sorry, but I'm having trouble connecting to the AI service right now. Please try again later."
+                
+                # Save to database
+                db = SessionLocal()
+                try:
+                    chat_log = models.ChatLog(
+                        user_id=request.user_id,
+                        session_id=request.session_id,
+                        user_message=request.message,
+                        bot_response=direct_response,
+                        timestamp=datetime.fromtimestamp(time.time())
+                    )
+                    db.add(chat_log)
+                    db.commit()
+                finally:
+                    db.close()
+                
+                # Broadcast response to WebSocket
+                response_message_data = {
+                    'user_id': request.user_id,
+                    'session_id': request.session_id,
+                    'original_message': request.message,
+                    'llm_response': direct_response,
+                    'timestamp': time.time(),
+                    'source': 'direct_openai'
+                }
+                await manager.broadcast(json.dumps(response_message_data))
+                
+                return ChatResponse(response=direct_response, timestamp=time.time())
             
             # Save to database
             db = SessionLocal()

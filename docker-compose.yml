@@ -76,9 +76,9 @@ services:
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - HF_MODEL=gpt2
-      - USE_OPENAI=false
-      # Add OPENAI_API_KEY if using OpenAI
-      # - OPENAI_API_KEY=your_openai_key_here
+      - USE_OPENAI=true
+      - OPENAI_MODEL=gpt-4
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./llm:/app
     command: python -m app.llm_service
