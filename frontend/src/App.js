@@ -5,6 +5,7 @@ function App() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const BACKEND_URL = 'http://localhost:8000';
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -17,12 +18,16 @@ function App() {
 
     try {
       // Call backend API
-      const response = await fetch('http://localhost:8000/chat', {
+      const response = await fetch(`${BACKEND_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: input })
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       // Add AI response
@@ -30,7 +35,7 @@ function App() {
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
       console.error('Error:', error);
-      const errorMessage = { text: 'Sorry, there was an error. Please try again.', sender: 'ai' };
+      const errorMessage = { text: `Sorry, there was an error: ${error.message || 'Please try again.'}`, sender: 'ai' };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setLoading(false);
@@ -53,7 +58,7 @@ function App() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            onKeyDown={(e) => e.key === 'Enter' && !loading && sendMessage()}
             placeholder="Type your message..."
           />
           <button onClick={sendMessage}>Send</button>

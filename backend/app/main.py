@@ -4,6 +4,7 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import logging
+from typing import Dict, Any
 
 # Load environment variables
 load_dotenv()
@@ -15,7 +16,11 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Simple AI Chatbot", description="Minimal chatbot with OpenAI integration")
 
 # Get OpenAI API key from environment
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# Initialize OpenAI client
+api_key = os.getenv('OPENAI_API_KEY')
+if not api_key:
+    raise ValueError("OPENAI_API_KEY environment variable is not set")
+client = OpenAI(api_key=api_key)
 
 class MessageRequest(BaseModel):
     message: str
@@ -24,7 +29,7 @@ class ChatResponse(BaseModel):
     response: str
 
 @app.post("/chat")
-async def chat(request: MessageRequest):
+async def chat(request: MessageRequest) -> Dict[str, str]:
     """Simple chat endpoint that calls OpenAI API"""
     try:
         response = client.chat.completions.create(
@@ -45,5 +50,5 @@ async def chat(request: MessageRequest):
         return {"response": "Sorry, I'm having trouble connecting to the AI service. Please try again."}
 
 @app.get("/")
-async def root():
+async def root() -> Dict[str, str]:
     return {"message": "Simple AI Chatbot API - Use POST /chat to send messages"}
