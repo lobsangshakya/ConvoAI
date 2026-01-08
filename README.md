@@ -4,8 +4,12 @@ A minimal chatbot application with OpenAI integration.
 
 ## Structure
 
-- `backend/` - FastAPI backend that connects to OpenAI
-- `frontend/` - React frontend that communicates with the backend
+- `backend/app/main.py` - FastAPI backend that connects to OpenAI
+- `backend/requirements.txt` - Dependencies for the backend
+- `frontend/src/App.js` - React chat interface
+- `frontend/src/App.css` - Styling for the chat interface
+- `frontend/src/index.js` - Main React entry point
+- `frontend/package.json` - Frontend dependencies
 
 ## Setup
 
