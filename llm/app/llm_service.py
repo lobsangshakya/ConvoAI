@@ -78,30 +78,37 @@ class LLMService:
         
         logger.info('LLM Service started listening for messages')
         
-        for message in self.consumer:
+        while True:  # Keep the service running indefinitely
             try:
-                data = message.value
-                logger.info(f'LLM Service received message: {data}')
-                
-                # Generate response using the LLM
-                response = self.model_handler.generate_response(data.get('message', ''))
-                
-                # Prepare response data
-                response_data = {
-                    'user_id': data.get('user_id', 'unknown'),
-                    'session_id': data.get('session_id', 'unknown'),
-                    'original_message': data.get('message'),
-                    'llm_response': response,
-                    'timestamp': time.time(),
-                    'source': 'llm'
-                }
-                
-                # Send response to the appropriate topic
-                self.producer.send('llm-responses', value=response_data)
-                logger.info(f'LLM Service sent response: {response[:50]}...')
-                
+                # Poll for messages with timeout
+                for message in self.consumer:
+                    try:
+                        data = message.value
+                        logger.info(f'LLM Service received message: {data}')
+                        
+                        # Generate response using the LLM
+                        response = self.model_handler.generate_response(data.get('message', ''))
+                        
+                        # Prepare response data
+                        response_data = {
+                            'user_id': data.get('user_id', 'unknown'),
+                            'session_id': data.get('session_id', 'unknown'),
+                            'original_message': data.get('message'),
+                            'llm_response': response,
+                            'timestamp': time.time(),
+                            'source': 'llm'
+                        }
+                        
+                        # Send response to the appropriate topic
+                        self.producer.send('llm-responses', value=response_data)
+                        logger.info(f'LLM Service sent response: {response[:50]}...')
+                        
+                    except Exception as e:
+                        logger.error(f'Error in LLM service processing: {str(e)}')
+                        
             except Exception as e:
-                logger.error(f'Error in LLM service processing: {str(e)}')
+                logger.error(f'Error in Kafka consumer: {str(e)}')
+                time.sleep(5)  # Wait a bit before retrying to consume messages
 
 
 if __name__ == '__main__':

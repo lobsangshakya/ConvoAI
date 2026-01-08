@@ -42,7 +42,13 @@ class ModelHandler:
     def _generate_with_openai(self, prompt: str) -> str:
         """Generate response using OpenAI API"""
         try:
-            client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            # Create OpenAI client with error handling for proxy-related issues
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                logger.error('OpenAI API key not found in environment')
+                return self._fallback_response(prompt)
+            
+            client = OpenAI(api_key=api_key)
             response = client.chat.completions.create(
                 model=self.model_name,
                 messages=[
@@ -53,6 +59,13 @@ class ModelHandler:
                 temperature=0.7
             )
             return response.choices[0].message.content.strip()
+        except TypeError as e:
+            if 'proxies' in str(e):
+                logger.error(f'Proxy configuration error with OpenAI: {str(e)}. This might be due to environment variables. Using fallback response.')
+                return self._fallback_response(prompt)
+            else:
+                logger.error(f'TypeError in OpenAI client: {str(e)}')
+                return self._fallback_response(prompt)
         except Exception as e:
             logger.error(f'Error generating response with OpenAI: {str(e)}')
             return self._fallback_response(prompt)

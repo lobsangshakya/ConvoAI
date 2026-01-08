@@ -170,8 +170,21 @@ def startup_event():
                 finally:
                     db.close()
             
-            consumer_service = KafkaConsumerService()
-            consumer_service.start_consuming(['llm-responses', 'rl-responses'], handle_response_message)
+            # Add retry logic for consumer initialization
+            max_retries = 30
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    consumer_service = KafkaConsumerService()
+                    consumer_service.start_consuming(['llm-responses', 'rl-responses'], handle_response_message)
+                    break  # Break if successful
+                except Exception as e:
+                    retry_count += 1
+                    logger.error(f'Failed to initialize Kafka consumer (attempt {retry_count}/{max_retries}): {str(e)}')
+                    if retry_count >= max_retries:
+                        logger.error('Max retries reached for Kafka consumer initialization. Consumer will not start.')
+                        return
+                    time.sleep(10)  # Wait before retrying
         
         # Run Kafka consumer in a separate thread
         consumer_thread = threading.Thread(target=kafka_consumer_loop, daemon=True)
