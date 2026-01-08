@@ -1,3 +1,50 @@
+# Simple AI Chatbot
+
+A minimal chatbot application with OpenAI integration.
+
+## Structure
+
+- `backend/` - FastAPI backend that connects to OpenAI
+- `frontend/` - React frontend that communicates with the backend
+
+## Setup
+
+1. Install backend dependencies:
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+2. Set up environment variables:
+```bash
+# In the backend directory, create .env file:
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+3. Start the backend:
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+4. Install frontend dependencies:
+```bash
+cd frontend
+npm install
+```
+
+5. Start the frontend:
+```bash
+cd frontend
+npm start
+```
+
+## Usage
+
+- Backend runs on http://localhost:8000
+- Frontend runs on http://localhost:3000
+- The chat interface allows sending messages to OpenAI and receiving responses
+
 # AI-Powered Chatbot
 
 A real-time chatbot system using Python, React, Docker, Kafka, and Reinforcement Learning.
