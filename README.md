@@ -13,6 +13,25 @@ A minimal chatbot application with OpenAI integration.
 
 ## Setup
 
+### Method 1: Using the run script (Recommended)
+
+1. Make sure you have Python and Node.js installed
+2. Set up environment variables in the root directory:
+```bash
+# Create .env file in the root directory:
+OPENAI_API_KEY=your_openai_api_key_here
+```
+3. Run the backend in one terminal:
+```bash
+./run_project.sh backend
+```
+4. Run the frontend in another terminal:
+```bash
+./run_project.sh frontend
+```
+
+### Method 2: Manual setup
+
 1. Install backend dependencies:
 ```bash
 cd backend
