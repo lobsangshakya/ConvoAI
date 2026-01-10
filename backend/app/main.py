@@ -60,7 +60,8 @@ async def chat(request: MessageRequest) -> Dict[str, str]:
                 {"role": "user", "content": request.message}
             ],
             max_tokens=150,
-            temperature=0.7
+            temperature=0.7,
+            timeout=20.0
         )
         
         ai_response = response.choices[0].message.content.strip()
