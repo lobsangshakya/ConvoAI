@@ -32,11 +32,14 @@ function App() {
     setLoading(true);
 
     try {
-      // Call backend API
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/chat`, {
+      // Call backend API - Updated endpoint to match backend API
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input })
+        body: JSON.stringify({ 
+          message: input,
+          sessionId: getCurrentSessionId() // Include session ID if available
+        })
       });
 
       if (!response.ok) {
@@ -48,9 +51,10 @@ function App() {
       // Add AI response
       const aiMessage = { 
         id: Date.now() + 1, 
-        text: data.response, 
+        text: data.reply, // Changed from data.response to data.reply to match backend response
         sender: 'ai',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        sources: data.sources || [] // Store sources if available
       };
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
@@ -65,6 +69,14 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to get or create session ID
+  const getCurrentSessionId = () => {
+    if (!window.currentSessionId) {
+      window.currentSessionId = Math.random().toString(36).substring(2, 15);
+    }
+    return window.currentSessionId;
   };
 
   const handleKeyPress = (e) => {
