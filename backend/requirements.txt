@@ -1,4 +1,9 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-openai==1.52.2
-python-dotenv==1.0.0
+fastapi
+uvicorn
+openai
+python-dotenv
+sentence-transformers
+numpy
+faiss-cpu
+httpx[http2]
+tiktoken
