@@ -1,9 +1,13 @@
 fastapi
 uvicorn
-openai
 python-dotenv
+transformers
+torch
+tokenizers
 sentence-transformers
 numpy
 faiss-cpu
 httpx[http2]
-tiktoken
+kafka-python
+pydantic-settings
+accelerate

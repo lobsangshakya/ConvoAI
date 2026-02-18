@@ -4,15 +4,16 @@ import numpy as np
 import faiss
 from typing import List, Dict, Any
 import logging
-from openai import OpenAI
+from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
 class RAGService:
-    def __init__(self, knowledge_dir: str, client: OpenAI):
+    def __init__(self, knowledge_dir: str, client=None):
         self.knowledge_dir = knowledge_dir
         self.client = client
-        self.embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+        self.embed_model_name = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+        self.encoder = SentenceTransformer(self.embed_model_name)
         self.index = None
         self.documents = []
         
@@ -58,12 +59,8 @@ class RAGService:
 
         logger.info(f"Generating embeddings for {len(all_chunks)} chunks...")
         
-        # Batch embedding generation
-        response = self.client.embeddings.create(
-            input=all_chunks,
-            model=self.embed_model
-        )
-        embeddings = np.array([data.embedding for data in response.data]).astype('float32')
+        # Generate embeddings using sentence transformers
+        embeddings = self.encoder.encode(all_chunks, convert_to_numpy=True).astype('float32')
         
         # Build FAISS index
         dimension = embeddings.shape[1]
@@ -76,12 +73,8 @@ class RAGService:
         if self.index is None or not self.documents:
             return []
             
-        # Embed query
-        query_resp = self.client.embeddings.create(
-            input=[query],
-            model=self.embed_model
-        )
-        query_embedding = np.array([query_resp.data[0].embedding]).astype('float32')
+        # Embed query using sentence transformers
+        query_embedding = self.encoder.encode([query], convert_to_numpy=True).astype('float32')
         
         # Search index
         distances, indices = self.index.search(query_embedding, top_k)

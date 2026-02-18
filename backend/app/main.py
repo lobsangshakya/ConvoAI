@@ -9,10 +9,12 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from openai import OpenAI
+
 from dotenv import load_dotenv
 
 from .rag_service import RAGService
+from .local_llm import LocalLLM
+from .kafka_consumer import init_kafka_processor, get_kafka_processor
 
 # Load environment variables
 load_dotenv()
@@ -31,17 +33,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# OpenAI Client
-api_key = os.getenv("OPENAI_API_KEY")
+# Local LLM Client
+llm_client = None
 try:
-    client = OpenAI(api_key=api_key or "missing")
+    llm_client = LocalLLM()
+    logger.info("Local LLM initialized successfully")
 except Exception as e:
-    logger.error(f"Failed to initialize OpenAI client: {e}")
-    client = None
+    logger.error(f"Failed to initialize local LLM: {e}")
 
-# RAG Service
+# Kafka Processor
+kafka_processor = None
+
+# RAG Service - Initialize with None as client for now
 KNOWLEDGE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../knowledge"))
-rag_service = RAGService(KNOWLEDGE_DIR, client)
+rag_service = RAGService(KNOWLEDGE_DIR, llm_client if llm_client else None)
 
 # In-memory session store (In production, use Redis or Postgres)
 chat_sessions: Dict[str, List[Dict[str, str]]] = {}
@@ -49,6 +54,9 @@ chat_sessions: Dict[str, List[Dict[str, str]]] = {}
 @app.on_event("startup")
 async def startup_event():
     import os, logging
+    
+    # Initialize Kafka processor
+    init_kafka_processor()
     
     if os.getenv("ENABLE_RAG", "0") == "1":
         try:
@@ -103,36 +111,57 @@ async def api_chat(request: ChatRequest):
     messages.extend(chat_sessions[session_id][-10:])
     messages.append({"role": "user", "content": user_message})
 
-    # Check if OpenAI client is available
-    if client is None:
+    # Get Kafka processor
+    kafka_proc = get_kafka_processor()
+    
+    # Enrich prompt with real-time data from Kafka if available
+    enriched_system_instr = system_instr
+    if kafka_proc:
+        try:
+            enriched_system_instr = kafka_proc.enrich_prompt_with_data(system_instr)
+        except Exception as e:
+            logger.warning(f"Could not enrich prompt with Kafka data: {e}")
+    
+    # Prepare the final prompt
+    final_messages = []
+    for msg in messages:
+        if msg["role"] == "system":
+            final_messages.append({"role": "system", "content": enriched_system_instr})
+        else:
+            final_messages.append(msg)
+    
+    # Use local LLM if available, otherwise return error
+    if llm_client is not None:
+        try:
+            # Convert the messages to a single prompt for local LLM
+            prompt = ""
+            for msg in final_messages:
+                role = msg["role"].capitalize()
+                content = msg["content"]
+                prompt += f"{role}: {content}\n"
+            
+            # Add instruction for the assistant's response
+            prompt += "Assistant:"
+            
+            full_reply = llm_client.generate_response(prompt, session_id=session_id, temperature=0.7)
+            
+            # Save to history
+            chat_sessions[session_id].append({"role": "user", "content": user_message})
+            chat_sessions[session_id].append({"role": "assistant", "content": full_reply})
+            
+            return {
+                "reply": full_reply,
+                "sources": sources
+            }
+        except Exception as e:
+            logger.exception(f"Local LLM error: {e}")
+            return {
+                "reply": "Local LLM service unavailable. Please try again.",
+                "sources": sources
+            }
+    else:
         return {
-            "reply": "LLM service unavailable. Please check API key or billing.",
-            "sources": sources
-        }
-
-    try:
-        response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            messages=messages,
-            temperature=0.7,
-            timeout=20  # Add timeout protection
-        )
-        
-        full_reply = response.choices[0].message.content
-        
-        # Save to history
-        chat_sessions[session_id].append({"role": "user", "content": user_message})
-        chat_sessions[session_id].append({"role": "assistant", "content": full_reply})
-        
-        return {
-            "reply": full_reply,
-            "sources": sources
-        }
-        
-    except Exception as e:
-        logger.exception(f"Chat error: {e}")
-        return {
-            "reply": "LLM service unavailable. Please check API key or billing.",
+            "reply": "LLM service unavailable. Please check that the local model is properly configured.",
             "sources": sources
         }
 
@@ -154,8 +183,8 @@ async def legacy_health():
 
 @app.post("/api/ingest")
 async def api_ingest():
-    if client is None:
-        return {"status": "error", "message": "OpenAI client not available"}
+    if llm_client is None:
+        return {"status": "error", "message": "Local LLM client not available"}
     try:
         rag_service.ingest()
         return {"status": "success", "documents_loaded": len(rag_service.documents)}
