@@ -20,7 +20,7 @@ ConvoAI is a production-ready conversational AI platform featuring local LLM inf
 
 ## API Endpoints
 - `POST /api/chat`: Main endpoint for RAG chat.
-  - Body: `{ sessionId: string, message: string }`
+  - Body: `{ sessionId: string, message: string, project_id?: string, provider?: string, model?: string }`
   - Response: `{ reply: string, sources?: [{id: string, preview: string}] }`
 - `POST /api/chat/stream`: Streaming endpoint for Ollama responses (Server-Sent Events).
 - `GET /api/health`: Checks API and RAG ingestion status.
@@ -117,6 +117,27 @@ The UI includes dropdowns to select:
 - Project: Choose between different project configurations
 - Provider: Switch between "Local LLM" and "Local Ollama"
 - Model: Specify the model name (e.g., "qwen2.5:3b" for Ollama)
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+1. **"Failed to fetch" Error**:
+   - Ensure backend is running on `http://localhost:8000`
+   - Check that `REACT_APP_BACKEND_URL=http://localhost:8000` in your `.env` file
+   - Verify CORS is properly configured (already set to allow all origins)
+
+2. **ESLint no-loop-func Warning**:
+   - Fixed by creating stable local copies inside loops in the streaming implementation
+
+3. **Ollama Connection Issues**:
+   - Verify Ollama is running with `ollama serve`
+   - Check that the model is pulled: `ollama pull qwen2.5:3b`
+   - Ensure `OLLAMA_BASE_URL` matches your Ollama instance
+
+4. **Health Check**:
+   - Test backend health: `curl http://localhost:8000/api/health`
+   - Test Ollama health: `curl http://localhost:8000/api/health/ollama`
 
 ## Streaming Support
 When using the Ollama provider, the application supports real-time streaming responses for a smoother user experience.

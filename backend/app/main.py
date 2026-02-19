@@ -4,6 +4,7 @@ import logging
 import httpx
 import json
 import asyncio
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -35,11 +36,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Local LLM Client
+# Local LLM Client - defer loading
 llm_client = None
 try:
-    llm_client = LocalLLM()
-    logger.info("Local LLM initialized successfully")
+    # Only initialize local LLM if explicitly requested
+    if os.getenv("ENABLE_LOCAL_LLM", "false").lower() == "true":
+        llm_client = LocalLLM()
+        logger.info("Local LLM initialized successfully")
+    else:
+        logger.info("Local LLM disabled, using Ollama or OpenAI")
 except Exception as e:
     logger.error(f"Failed to initialize local LLM: {e}")
 
@@ -79,6 +84,9 @@ async def startup_event():
 class ChatRequest(BaseModel):
     sessionId: Optional[str] = None
     message: str
+    project_id: Optional[str] = "default"  # Add project_id to request
+    provider: Optional[str] = None  # Allow provider override
+    model: Optional[str] = None  # Allow model override
 
 @app.post("/api/chat")
 async def api_chat(request: ChatRequest):
@@ -89,13 +97,18 @@ async def api_chat(request: ChatRequest):
     if session_id not in chat_sessions:
         chat_sessions[session_id] = []
     
-    # Get project configuration (default to default project if not specified)
-    # For now, we'll use a default project - in the future this could come from request
-    project_config = project_manager.get_project("default") or ProjectConfig(
-        project_id="default",
-        provider=ProviderType.LOCAL_LLM,
-        model="microsoft/DialoGPT-medium"
+    # Get project configuration based on request
+    project_config = project_manager.get_project(request.project_id) or ProjectConfig(
+        project_id=request.project_id,
+        provider=ProviderType.OLLAMA,  # Default to Ollama instead of Local LLM
+        model="qwen2.5:3b"  # Use available model
     )
+    
+    # Override provider/model if specified in request
+    if request.provider:
+        project_config.provider = ProviderType(request.provider)
+    if request.model:
+        project_config.model = request.model
     
     # 1. Retrieval
     sources = []
@@ -236,13 +249,19 @@ async def api_chat_stream(request: ChatRequest):
     if session_id not in chat_sessions:
         chat_sessions[session_id] = []
     
-    # Get project configuration (default to default project if not specified)
-    project_config = project_manager.get_project("default") or ProjectConfig(
-        project_id="default",
+    # Get project configuration based on request
+    project_config = project_manager.get_project(request.project_id) or ProjectConfig(
+        project_id=request.project_id,
         provider=ProviderType.OLLAMA,  # Default to Ollama for streaming
         model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
     )
     
+    # Override provider/model if specified in request
+    if request.provider:
+        project_config.provider = ProviderType(request.provider)
+    if request.model:
+        project_config.model = request.model
+
     # 1. Retrieval
     sources = []
     context_text = ""
@@ -327,9 +346,15 @@ async def api_chat_stream(request: ChatRequest):
 @app.get("/api/health")
 async def health_check():
     rag_enabled = os.getenv("ENABLE_RAG", "0") == "1"
+    ollama_available = ollama_provider is not None
+    local_llm_available = llm_client is not None
+    
     return {
         "status": "ok",
-        "rag_enabled": rag_enabled
+        "rag_enabled": rag_enabled,
+        "ollama_available": ollama_available,
+        "local_llm_available": local_llm_available,
+        "timestamp": datetime.utcnow().isoformat()
     }
 
 @app.get("/health")

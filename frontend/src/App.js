@@ -8,8 +8,8 @@ function App() {
   ]);
   const [loading, setLoading] = useState(false);
   const [selectedProject, setSelectedProject] = useState('default');
-  const [provider, setProvider] = useState('local_llm'); // Default provider
-  const [model, setModel] = useState('microsoft/DialoGPT-medium'); // Default model
+  const [provider, setProvider] = useState('ollama'); // Default provider
+  const [model, setModel] = useState('qwen2.5:3b'); // Default model
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -38,27 +38,43 @@ function App() {
       // Determine if we should use streaming based on provider
       const useStreaming = provider === 'ollama';
       const endpoint = useStreaming ? '/api/chat/stream' : '/api/chat';
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+      
+      // Add timeout support
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
       
       if (useStreaming) {
         // For streaming, we'll make a special request
-        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}${endpoint}`, {
+        const response = await fetch(`${backendUrl}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             message: input,
-            sessionId: getCurrentSessionId()
-          })
+            sessionId: getCurrentSessionId(),
+            project_id: selectedProject,
+            provider: provider,
+            model: model
+          }),
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
+        if (!response.body) {
+          throw new Error('ReadableStream not supported in this browser');
+        }
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let aiMessageText = '';
+        const aiMessageId = Date.now() + 1;
         let aiMessage = { 
-          id: Date.now() + 1, 
+          id: aiMessageId, 
           text: '', 
           sender: 'ai',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -75,41 +91,51 @@ function App() {
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n');
 
-            for (const line of lines) {
+            // Process each line individually to avoid the loop closure issue
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              
               if (line.startsWith('data: ')) {
                 const dataStr = line.slice(6); // Remove 'data: ' prefix
                 if (dataStr.trim() && dataStr !== '[DONE]') {
                   try {
                     const data = JSON.parse(dataStr);
-                    if (data.content) {
-                      aiMessageText += data.content;
+                    
+                    // Create local copies to avoid closure issues
+                    const currentAiMessageId = aiMessageId;
+                    const currentData = data;
+                    const currentAiMessageText = aiMessageText; // Create copy of aiMessageText
+                    
+                    if (currentData.content) {
+                      const updatedText = currentAiMessageText + currentData.content;
                       
                       // Update the AI message with new content
                       setMessages(prev => {
                         const newMessages = [...prev];
-                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === aiMessage.id);
+                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === currentAiMessageId);
                         if (aiMsgIndex !== -1) {
                           newMessages[aiMsgIndex] = {
                             ...newMessages[aiMsgIndex],
-                            text: aiMessageText
+                            text: updatedText
                           };
                         }
                         return newMessages;
                       });
-                    } else if (data.error) {
+                    } else if (currentData.error) {
                       // Handle error case
-                      aiMessageText = `Error: ${data.error}`;
+                      const errorMessage = `Error: ${currentData.error}`;
                       setMessages(prev => {
                         const newMessages = [...prev];
-                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === aiMessage.id);
+                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === currentAiMessageId);
                         if (aiMsgIndex !== -1) {
                           newMessages[aiMsgIndex] = {
                             ...newMessages[aiMsgIndex],
-                            text: aiMessageText
+                            text: errorMessage
                           };
                         }
                         return newMessages;
                       });
+                      break; // Exit the streaming loop on error
                     }
                   } catch (e) {
                     console.error('Error parsing SSE data:', e);
@@ -123,14 +149,20 @@ function App() {
         }
       } else {
         // For non-streaming requests
-        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}${endpoint}`, {
+        const response = await fetch(`${backendUrl}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             message: input,
-            sessionId: getCurrentSessionId()
-          })
+            sessionId: getCurrentSessionId(),
+            project_id: selectedProject,
+            provider: provider,
+            model: model
+          }),
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -150,9 +182,19 @@ function App() {
       }
     } catch (error) {
       console.error('Error:', error);
+      let errorMessageText = `Sorry, there was an error: `;
+      
+      if (error.name === 'AbortError') {
+        errorMessageText += 'Request timed out. Please try again.';
+      } else if (error.message.includes('Failed to fetch')) {
+        errorMessageText += 'Unable to connect to the server. Make sure the backend is running.';
+      } else {
+        errorMessageText += error.message || 'Please try again.';
+      }
+      
       const errorMessage = { 
         id: Date.now() + 1, 
-        text: `Sorry, there was an error: ${error.message || 'Please try again.'}`, 
+        text: errorMessageText, 
         sender: 'ai',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
@@ -206,8 +248,8 @@ function App() {
               }}
               className="provider-dropdown"
             >
-              <option value="local_llm">Local LLM</option>
               <option value="ollama">Local Ollama</option>
+              <option value="local_llm">Local LLM</option>
             </select>
             
             <input

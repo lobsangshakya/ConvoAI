@@ -15,8 +15,8 @@ class ProviderType(str, Enum):
 
 class ProjectConfig(BaseModel):
     project_id: str
-    provider: ProviderType = ProviderType.LOCAL_LLM
-    model: str = "microsoft/DialoGPT-medium"
+    provider: ProviderType = ProviderType.OLLAMA  # Default to Ollama
+    model: str = "qwen2.5:3b"  # Use available model
     system_prompt: Optional[str] = None
     settings: Dict[str, Any] = {}
 

@@ -58,60 +58,104 @@ class OllamaProvider(LLMProvider):
         if "options" in kwargs:
             payload["options"].update(kwargs["options"])
         
-        logger.info(f"Sending request to Ollama: {url}")
+        logger.info(f"Sending request to Ollama: {url} with model: {model}")
         
-        for attempt in range(self.max_retries + 1):
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    async with client.stream("POST", url, json=payload) as response:
+        if not stream:
+            # For non-streaming requests, make a direct call and return the full response
+            for attempt in range(self.max_retries + 1):
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout) as client:
+                        response = await client.post(url, json=payload)
+                        
                         if response.status_code != 200:
-                            logger.error(f"Ollama returned status {response.status_code}: {await response.aread()}")
+                            error_content = response.content
+                            logger.error(f"Ollama returned status {response.status_code}: {error_content}")
                             if attempt < self.max_retries:
                                 continue
                             else:
-                                yield f"Error: Ollama returned status {response.status_code}"
+                                yield f"Error: Ollama returned status {response.status_code} - {error_content.decode('utf-8')}"
                                 return
                         
-                        # Process streaming response
-                        async for line in response.aiter_lines():
-                            if line.strip():
-                                try:
-                                    data = json.loads(line)
-                                    
-                                    # Check if this is the final response
-                                    if data.get("done", False):
-                                        break
-                                    
-                                    # Yield the content
-                                    if "message" in data and "content" in data["message"]:
-                                        content = data["message"]["content"]
-                                        if content:
-                                            yield content
-                                except json.JSONDecodeError as e:
-                                    logger.error(f"Error decoding JSON from Ollama: {e}")
+                        # Parse the response for non-streaming
+                        result = response.json()
+                        content = result.get("message", {}).get("content", "")
+                        if content:
+                            yield content
+                        return  # Exit after yielding the full response
+                        
+                except httpx.TimeoutException as e:
+                    logger.error(f"Ollama request timed out: {e}")
+                    if attempt < self.max_retries:
+                        continue
+                    else:
+                        yield f"Error: Request to Ollama timed out after {self.timeout}s"
+                        return
+                except httpx.RequestError as e:
+                    logger.error(f"Ollama request error: {e}")
+                    if attempt < self.max_retries:
+                        continue
+                    else:
+                        yield f"Error: Unable to connect to Ollama - {str(e)}"
+                        return
+                except Exception as e:
+                    logger.error(f"Unexpected error calling Ollama: {e}")
+                    yield f"Error: Unexpected error connecting to Ollama - {str(e)}"
+                    return
+        else:
+            # For streaming requests, use the original streaming logic
+            for attempt in range(self.max_retries + 1):
+                try:
+                    async with httpx.AsyncClient(timeout=self.timeout) as client:
+                        async with client.stream("POST", url, json=payload) as response:
+                            if response.status_code != 200:
+                                error_content = await response.aread()
+                                logger.error(f"Ollama returned status {response.status_code}: {error_content}")
+                                if attempt < self.max_retries:
                                     continue
-                                except Exception as e:
-                                    logger.error(f"Unexpected error processing Ollama response: {e}")
-                                    continue
+                                else:
+                                    yield f"Error: Ollama returned status {response.status_code} - {error_content.decode('utf-8')}"
+                                    return
                             
-            except httpx.TimeoutException as e:
-                logger.error(f"Ollama request timed out: {e}")
-                if attempt < self.max_retries:
-                    continue
-                else:
-                    yield f"Error: Request to Ollama timed out after {self.timeout}s"
+                            # Process streaming response
+                            async for line in response.aiter_lines():
+                                if line.strip():
+                                    try:
+                                        data = json.loads(line)
+                                        
+                                        # Check if this is the final response
+                                        if data.get("done", False):
+                                            break
+                                        
+                                        # Yield the content
+                                        if "message" in data and "content" in data["message"]:
+                                            content = data["message"]["content"]
+                                            if content:
+                                                yield content
+                                    except json.JSONDecodeError as e:
+                                        logger.error(f"Error decoding JSON from Ollama: {e}")
+                                        continue
+                                    except Exception as e:
+                                        logger.error(f"Unexpected error processing Ollama response: {e}")
+                                        continue
+                                
+                except httpx.TimeoutException as e:
+                    logger.error(f"Ollama request timed out: {e}")
+                    if attempt < self.max_retries:
+                        continue
+                    else:
+                        yield f"Error: Request to Ollama timed out after {self.timeout}s"
+                        return
+                except httpx.RequestError as e:
+                    logger.error(f"Ollama request error: {e}")
+                    if attempt < self.max_retries:
+                        continue
+                    else:
+                        yield f"Error: Unable to connect to Ollama - {str(e)}"
+                        return
+                except Exception as e:
+                    logger.error(f"Unexpected error calling Ollama: {e}")
+                    yield f"Error: Unexpected error connecting to Ollama - {str(e)}"
                     return
-            except httpx.RequestError as e:
-                logger.error(f"Ollama request error: {e}")
-                if attempt < self.max_retries:
-                    continue
-                else:
-                    yield f"Error: Unable to connect to Ollama - {str(e)}"
-                    return
-            except Exception as e:
-                logger.error(f"Unexpected error calling Ollama: {e}")
-                yield f"Error: Unexpected error connecting to Ollama - {str(e)}"
-                return
 
     async def generate_streaming_response(
         self, 
@@ -138,18 +182,19 @@ class OllamaProvider(LLMProvider):
         if "options" in kwargs:
             payload["options"].update(kwargs["options"])
         
-        logger.info(f"Sending streaming request to Ollama: {url}")
+        logger.info(f"Sending streaming request to Ollama: {url} with model: {model}")
         
         for attempt in range(self.max_retries + 1):
             try:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     async with client.stream("POST", url, json=payload) as response:
                         if response.status_code != 200:
-                            logger.error(f"Ollama returned status {response.status_code}: {await response.aread()}")
+                            error_content = await response.aread()
+                            logger.error(f"Ollama returned status {response.status_code}: {error_content}")
                             if attempt < self.max_retries:
                                 continue
                             else:
-                                yield f"data: {{\"error\": \"Ollama returned status {response.status_code}\"}}\n\n"
+                                yield f"data: {{\"error\": \"Ollama returned status {response.status_code} - {error_content.decode('utf-8')}\"}}\n\n"
                                 return
                         
                         # Process streaming response for SSE
