@@ -1,0 +1,11 @@
+Welcome to ConvoAI! This is a sample knowledge document that demonstrates the RAG (Retrieval Augmented Generation) capability of our chatbot. The system can read text files placed in the knowledge directory and use them to enhance responses with relevant context.
+
+The RAG system chunks documents into segments of approximately 1000 characters with 150-character overlaps to maintain context. When users ask questions related to the content in these documents, the system retrieves the most relevant chunks and incorporates them into the AI's response.
+
+Some key features of ConvoAI include:
+- Conversational memory that remembers context within a session
+- Fast response times through optimized embeddings
+- Support for various document formats including .txt and .md files
+- Automatic document indexing on system startup
+
+This system is designed to be extensible, allowing you to add domain-specific knowledge by simply placing text files in the knowledge directory.

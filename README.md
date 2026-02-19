@@ -1,232 +1,120 @@
-# Simple AI Chatbot
+# ConvoAI
 
-A minimal chatbot application with OpenAI integration.
+ConvoAI is a modern conversational AI platform featuring local LLM inference (Ollama or Transformers), Retrieval Augmented Generation (RAG), and a premium React chat interface with project-based provider selection.
 
-## Structure
-
-- `backend/app/main.py` - FastAPI backend that connects to OpenAI
-- `backend/requirements.txt` - Dependencies for the backend
-- `frontend/src/App.js` - React chat interface
-- `frontend/src/App.css` - Styling for the chat interface
-- `frontend/src/index.js` - Main React entry point
-- `frontend/package.json` - Frontend dependencies
-
-## Setup
-
-### Method 1: Using the run script (Recommended)
-
-1. Make sure you have Python and Node.js installed
-2. Set up environment variables in the root directory:
-```bash
-# Create .env file in the root directory:
-OPENAI_API_KEY=your_openai_api_key_here
-```
-3. Run the backend in one terminal:
-```bash
-./run_project.sh backend
-```
-4. Run the frontend in another terminal:
-```bash
-./run_project.sh frontend
-```
-
-### Method 2: Manual setup
-
-1. Install backend dependencies:
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-2. Set up environment variables:
-```bash
-# In the backend directory, create .env file:
-OPENAI_API_KEY=your_openai_api_key_here
-```
-
-3. Start the backend:
-```bash
-cd backend
-uvicorn app.main:app --reload
-```
-
-4. Install frontend dependencies:
-```bash
-cd frontend
-npm install
-```
-
-5. Start the frontend:
-```bash
-cd frontend
-npm start
-```
-
-## Usage
-
-- Backend runs on http://localhost:8000
-- Frontend runs on http://localhost:3000
-- The chat interface allows sending messages to OpenAI and receiving responses
-
-# AI-Powered Chatbot
-
-A real-time chatbot system using Python, React, Docker, Kafka, and Reinforcement Learning.
+## Key Features
+- **Multiple LLM Providers**: Choose between local Ollama models or Transformers for inference
+- **Project-Based Configuration**: Per-project settings for providers and models
+- **Retrieval Augmented Generation (RAG)**: Automatically retrieves relevant context from your local knowledge base for more accurate and context-aware answers
+- **Conversation History**: Maintains session-based conversation history for contextual interactions
+- **Real-time Streaming**: Smooth, ChatGPT-like typing experience with token-by-token streaming
+- **Premium Chat UI**: Modern, responsive design with project/provider selection dropdowns
 
 ## Architecture
+- **Frontend**: React with real-time streaming and project selector
+- **Backend**: FastAPI with RAG service, local LLM integration, and Ollama provider
+- **LLM**: Local Transformers model or Ollama (qwen2.5:3b, etc.)
+- **Embeddings**: Sentence transformers for local embeddings
 
-The system consists of:
-- **Backend**: FastAPI-based service handling API requests and Kafka integration
-- **Frontend**: React-based chat interface
-- **RL Agent**: Python-based reinforcement learning agent that evaluates interactions
-- **LLM Service**: Large language model service for generating responses
-- **Kafka**: Message broker for communication between services
-- **Database**: PostgreSQL for storing conversation logs
+## API Endpoints
+- `POST /api/chat`: Main endpoint for RAG chat
+  - Body: `{ sessionId: string, message: string, project_id?: string, provider?: string, model?: string }`
+  - Response: `{ reply: string, sources?: [{id: string, preview: string}] }`
+- `POST /api/chat/stream`: Streaming endpoint for Ollama responses (Server-Sent Events)
+- `GET /api/health`: Checks API status
 
 ## Prerequisites
+- Node.js (v18+)
+- Python (v3.9+)
+- Ollama (optional, for Ollama provider)
 
-- Docker
-- Docker Compose
+## Installation & Setup
 
-## Setup Instructions
-
-1. Clone the repository
-2. Navigate to the project directory
-3. Run the application using Docker Compose:
-
+### 1. Clone the Repository
 ```bash
-docker-compose up --build
+git clone <repository-url>
+cd convoai
 ```
 
-The application will be available at:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-
-## Configuration
-
-### Environment Variables
-
-For the LLM service, you can configure:
-- `USE_OPENAI`: Set to `true` to use OpenAI API (default: `false`)
-- `OPENAI_API_KEY`: Your OpenAI API key (required if USE_OPENAI=true)
-- `HF_MODEL`: Hugging Face model to use (default: `gpt2`)
-
-### Kafka Topics
-
-The system uses the following Kafka topics:
-- `chat-messages`: For incoming user messages
-- `llm-responses`: For responses from the LLM service
-- `rl-responses`: For responses from the RL agent
-
-## Services
-
-### Backend
-
-The backend service exposes the following endpoints:
-
-- `POST /chat/send`: Send a message to the chatbot
-- `GET /chat/history/{session_id}`: Get chat history for a session
-- `GET /`: Health check endpoint
-- `WS /ws`: WebSocket endpoint for real-time updates
-
-### Frontend
-
-The React frontend provides a real-time chat interface that connects to the backend via REST API and WebSocket.
-
-### RL Agent
-
-The reinforcement learning agent:
-- Consumes messages from the `chat-messages` topic
-- Calculates reward based on conversation quality
-- Generates response suggestions
-- Publishes results to the `rl-responses` topic
-
-### LLM Service
-
-The LLM service:
-- Consumes messages from the `chat-messages` topic
-- Generates human-like responses using either OpenAI or Hugging Face models
-- Publishes results to the `llm-responses` topic
-
-## Development
-
-To run individual services during development:
-
-### Backend
-
+### 2. Environment Setup
+Create a `.env` file in the root directory:
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+# Ollama Configuration
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_TIMEOUT=60
+
+# RAG Configuration
+ENABLE_RAG=0  # Set to 1 to enable RAG functionality
+
+# Kafka Configuration (disabled by default)
+ENABLE_KAFKA=false
+
+# Frontend Configuration
+REACT_APP_BACKEND_URL=http://localhost:8000
 ```
 
-### Frontend
+### 3. Knowledge Ingestion (Optional)
+Place any markdown (`.md`) or text (`.txt`) files in the `/knowledge` directory. They will be automatically indexed on backend startup when RAG is enabled.
 
-```bash
-cd frontend
-npm install
-npm start
-```
+### 4. Running the Application
 
-### RL Agent
+#### Option A: With Ollama
+1. Install Ollama from [ollama.ai](https://ollama.ai)
+2. Pull a model:
+   ```bash
+   ollama pull qwen2.5:3b
+   ```
+3. Start Ollama server:
+   ```bash
+   ollama serve
+   ```
 
-```bash
-cd rl_agent
-pip install -r requirements.txt
-python -m app.rl_agent
-```
+#### Option B: Local Setup
+1. Install backend dependencies:
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   ```
+2. Start the backend:
+   ```bash
+   uvicorn app.main:app --reload --port 8000
+   ```
+3. In a new terminal, install and start the frontend:
+   ```bash
+   cd frontend
+   npm install
+   npm start
+   ```
 
-### LLM Service
+The application will be available at `http://localhost:3000`.
 
-```bash
-cd llm
-pip install -r requirements.txt
-python -m app.llm_service
-```
+## Project Selection
+The UI includes dropdowns to select:
+- Project: Choose between different project configurations
+- Provider: Switch between "Local Ollama" and "Local LLM"
+- Model: Specify the model name
 
-## Project Structure
+## Deployment
+ConvoAI is ready for deployment on:
+- **Frontend**: Vercel/Netlify for React build
+- **Backend**: Render/Fly.io for FastAPI application
+- **Containerized**: Use Docker with the provided configurations
 
-```
-ChatBot/
-├── backend/           # FastAPI backend
-│   ├── app/
-│   ├── models/
-│   ├── services/
-│   └── utils/
-├── frontend/          # React frontend
-│   ├── src/
-│   ├── public/
-│   └── package.json
-├── rl_agent/          # Reinforcement learning agent
-│   ├── app/
-│   ├── models/
-│   └── services/
-├── llm/               # LLM service
-│   ├── app/
-│   ├── models/
-│   └── services/
-├── docker-compose.yml
-└── README.md
-```
+## Contributing
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## How It Works
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-1. User sends a message through the React frontend
-2. Frontend sends the message to the backend via REST API
-3. Backend publishes the message to the `chat-messages` Kafka topic
-4. Both RL Agent and LLM Service consume the message
-5. RL Agent calculates a reward and generates a response suggestion
-6. LLM Service generates a response using the language model
-7. Both services publish their responses to their respective Kafka topics
-8. Backend consumes responses from Kafka and broadcasts them via WebSocket
-9. Frontend receives the response in real-time and displays it
+## Changelog
+See [CHANGELOG.md](./CHANGELOG.md) for a full list of changes and updates.
 
-## Technologies Used
-
-- **Backend**: FastAPI, SQLAlchemy, Kafka
-- **Frontend**: React, WebSocket
-- **RL**: TensorFlow, NumPy
-- **LLM**: Transformers, PyTorch, OpenAI API
-- **Database**: PostgreSQL
-- **Message Broker**: Apache Kafka
-- **Containerization**: Docker, Docker Compose# ConvoAI
-# ConvoAI
+## Acknowledgments
+- Built with React and FastAPI
+- Powered by Ollama for local LLM inference
+- Uses Transformers for local model support
