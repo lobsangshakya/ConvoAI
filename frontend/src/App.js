@@ -71,9 +71,10 @@ function App() {
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let aiMessageText = '';
+        
+        // Create initial AI message
         const aiMessageId = Date.now() + 1;
-        let aiMessage = { 
+        const initialAiMessage = { 
           id: aiMessageId, 
           text: '', 
           sender: 'ai',
@@ -81,7 +82,7 @@ function App() {
         };
 
         // Add empty AI message to be updated progressively
-        setMessages(prev => [...prev, aiMessage]);
+        setMessages(prev => [...prev, initialAiMessage]);
 
         try {
           while (true) {
@@ -91,7 +92,6 @@ function App() {
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n');
 
-            // Process each line individually to avoid the loop closure issue
             for (let i = 0; i < lines.length; i++) {
               const line = lines[i];
               
@@ -101,36 +101,30 @@ function App() {
                   try {
                     const data = JSON.parse(dataStr);
                     
-                    // Create local copies to avoid closure issues
-                    const currentAiMessageId = aiMessageId;
-                    const currentData = data;
-                    const currentAiMessageText = aiMessageText; // Create copy of aiMessageText
-                    
-                    if (currentData.content) {
-                      const updatedText = currentAiMessageText + currentData.content;
-                      
-                      // Update the AI message with new content
+                    if (data.content) {
+                      // Update the AI message by appending the new content
                       setMessages(prev => {
                         const newMessages = [...prev];
-                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === currentAiMessageId);
+                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === aiMessageId);
                         if (aiMsgIndex !== -1) {
+                          // Append the new content to the existing text
+                          const currentText = newMessages[aiMsgIndex].text;
                           newMessages[aiMsgIndex] = {
                             ...newMessages[aiMsgIndex],
-                            text: updatedText
+                            text: currentText + data.content
                           };
                         }
                         return newMessages;
                       });
-                    } else if (currentData.error) {
+                    } else if (data.error) {
                       // Handle error case
-                      const errorMessage = `Error: ${currentData.error}`;
                       setMessages(prev => {
                         const newMessages = [...prev];
-                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === currentAiMessageId);
+                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === aiMessageId);
                         if (aiMsgIndex !== -1) {
                           newMessages[aiMsgIndex] = {
                             ...newMessages[aiMsgIndex],
-                            text: errorMessage
+                            text: `Error: ${data.error}`
                           };
                         }
                         return newMessages;
