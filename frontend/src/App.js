@@ -7,8 +7,6 @@ function App() {
     { id: 1, text: "Hello! I'm your AI assistant. How can I help you today?", sender: 'ai', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
   ]);
   const [loading, setLoading] = useState(false);
-  const [selectedProject, setSelectedProject] = useState('default');
-  const [provider, setProvider] = useState('ollama'); // Default provider
   const [model, setModel] = useState('qwen2.5:3b'); // Default model
   const messagesEndRef = useRef(null);
 
@@ -35,8 +33,8 @@ function App() {
     setLoading(true);
 
     try {
-      // Determine if we should use streaming based on provider
-      const useStreaming = provider === 'ollama';
+      // Always use streaming for Ollama
+      const useStreaming = true;
       const endpoint = useStreaming ? '/api/chat/stream' : '/api/chat';
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
       
@@ -52,8 +50,8 @@ function App() {
           body: JSON.stringify({ 
             message: input,
             sessionId: getCurrentSessionId(),
-            project_id: selectedProject,
-            provider: provider,
+            project_id: 'default',
+            provider: 'ollama',
             model: model
           }),
           signal: controller.signal
@@ -149,8 +147,8 @@ function App() {
           body: JSON.stringify({ 
             message: input,
             sessionId: getCurrentSessionId(),
-            project_id: selectedProject,
-            provider: provider,
+            project_id: 'default',
+            provider: 'ollama',
             model: model
           }),
           signal: controller.signal
@@ -218,39 +216,12 @@ function App() {
       <div className="chat-container">
         <div className="chat-header">
           <h2>ConvoAI</h2>
-          <div className="project-selector">
-            <select 
-              value={selectedProject} 
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="project-dropdown"
-            >
-              <option value="default">Default Project</option>
-              <option value="ollama-project">Local Ollama</option>
-              <option value="local-llm">Local LLM</option>
-            </select>
-            
-            <select 
-              value={provider} 
-              onChange={(e) => {
-                setProvider(e.target.value);
-                // Update model based on provider
-                if (e.target.value === 'ollama') {
-                  setModel('qwen2.5:3b');
-                } else if (e.target.value === 'local_llm') {
-                  setModel('microsoft/DialoGPT-medium');
-                }
-              }}
-              className="provider-dropdown"
-            >
-              <option value="ollama">Local Ollama</option>
-              <option value="local_llm">Local LLM</option>
-            </select>
-            
+          <div className="model-selector">
             <input
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="Model name"
+              placeholder="Model name (e.g., qwen2.5:3b)"
               className="model-input"
             />
           </div>
