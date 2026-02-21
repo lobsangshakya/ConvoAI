@@ -33,145 +33,42 @@ function App() {
     setLoading(true);
 
     try {
-      // Always use streaming for Ollama
-      const useStreaming = true;
-      const endpoint = useStreaming ? '/api/chat/stream' : '/api/chat';
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
       
       // Add timeout support
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
       
-      if (useStreaming) {
-        // For streaming, we'll make a special request
-        const response = await fetch(`${backendUrl}${endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            message: input,
-            sessionId: getCurrentSessionId(),
-            project_id: 'default',
-            provider: 'ollama',
-            model: model
-          }),
-          signal: controller.signal
-        });
+      // Simple non-streaming request
+      const response = await fetch(`${backendUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          message: input,
+          sessionId: getCurrentSessionId(),
+          model: model
+        }),
+        signal: controller.signal
+      });
 
-        clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        if (!response.body) {
-          throw new Error('ReadableStream not supported in this browser');
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        
-        // Create initial AI message
-        const aiMessageId = Date.now() + 1;
-        const initialAiMessage = { 
-          id: aiMessageId, 
-          text: '', 
-          sender: 'ai',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-
-        // Add empty AI message to be updated progressively
-        setMessages(prev => [...prev, initialAiMessage]);
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-
-            for (let i = 0; i < lines.length; i++) {
-              const line = lines[i];
-              
-              if (line.startsWith('data: ')) {
-                const dataStr = line.slice(6); // Remove 'data: ' prefix
-                if (dataStr.trim() && dataStr !== '[DONE]') {
-                  try {
-                    const data = JSON.parse(dataStr);
-                    
-                    if (data.content) {
-                      // Update the AI message by appending the new content
-                      setMessages(prev => {
-                        const newMessages = [...prev];
-                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === aiMessageId);
-                        if (aiMsgIndex !== -1) {
-                          // Append the new content to the existing text
-                          const currentText = newMessages[aiMsgIndex].text;
-                          newMessages[aiMsgIndex] = {
-                            ...newMessages[aiMsgIndex],
-                            text: currentText + data.content
-                          };
-                        }
-                        return newMessages;
-                      });
-                    } else if (data.error) {
-                      // Handle error case
-                      setMessages(prev => {
-                        const newMessages = [...prev];
-                        const aiMsgIndex = newMessages.findIndex(msg => msg.id === aiMessageId);
-                        if (aiMsgIndex !== -1) {
-                          newMessages[aiMsgIndex] = {
-                            ...newMessages[aiMsgIndex],
-                            text: `Error: ${data.error}`
-                          };
-                        }
-                        return newMessages;
-                      });
-                      break; // Exit the streaming loop on error
-                    }
-                  } catch (e) {
-                    console.error('Error parsing SSE data:', e);
-                  }
-                }
-              }
-            }
-          }
-        } finally {
-          reader.releaseLock();
-        }
-      } else {
-        // For non-streaming requests
-        const response = await fetch(`${backendUrl}${endpoint}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            message: input,
-            sessionId: getCurrentSessionId(),
-            project_id: 'default',
-            provider: 'ollama',
-            model: model
-          }),
-          signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        // Add AI response
-        const aiMessage = { 
-          id: Date.now() + 1, 
-          text: data.reply, 
-          sender: 'ai',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          sources: data.sources || [] // Store sources if available
-        };
-        setMessages(prev => [...prev, aiMessage]);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
+      const data = await response.json();
+      
+      // Add AI response
+      const aiMessage = { 
+        id: Date.now() + 1, 
+        text: data.response || data.reply || 'Sorry, I could not process your request.', 
+        sender: 'ai',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        sources: data.sources || []
+      };
+      setMessages(prev => [...prev, aiMessage]);
+      
     } catch (error) {
       console.error('Error:', error);
       let errorMessageText = `Sorry, there was an error: `;
@@ -179,7 +76,7 @@ function App() {
       if (error.name === 'AbortError') {
         errorMessageText += 'Request timed out. Please try again.';
       } else if (error.message.includes('Failed to fetch')) {
-        errorMessageText += 'Unable to connect to the server. Make sure the backend is running.';
+        errorMessageText += 'Unable to connect to server. Make sure backend is running.';
       } else {
         errorMessageText += error.message || 'Please try again.';
       }
