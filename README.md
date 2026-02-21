@@ -13,7 +13,7 @@ A beginner-friendly chatbot application with React frontend and FastAPI backend.
 
 1. **Clone and setup:**
 ```bash
-git clone <your-repo>
+git clone git@github.com:lobsangshakya/ConvoAI.git
 cd ChatBot
 ```
 
@@ -38,8 +38,6 @@ npm start
 ```
 
 5. **Open app:** http://localhost:3000
-
-That's it!
 
 ## Project Structure
 
