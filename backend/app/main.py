@@ -8,20 +8,14 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from openai import OpenAI
 
-# Safe optional imports for RAG and Ollama
+# Safe optional imports for RAG
 try:
     from .rag_service import RAGService
 except Exception:
     RAGService = None
     logging.warning("RAG service not available - continuing without RAG")
-
-try:
-    from .ollama_provider import OllamaProvider, Message
-except Exception:
-    OllamaProvider = None
-    Message = None
-    logging.warning("Ollama provider not available - continuing without Ollama")
 
 # Load environment variables
 load_dotenv()
@@ -40,17 +34,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Optional Services ──────────────────────────────────────────────────────────
-ollama_provider = None
-rag_service = None
+# ── OpenAI Client ──────────────────────────────────────────────────────────
+openai_client = None
+try:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key:
+        openai_client = OpenAI(api_key=api_key)
+        logger.info("OpenAI client initialized successfully")
+    else:
+        logger.warning("OPENAI_API_KEY not set - using fallback responses")
+except Exception as e:
+    logger.error(f"Failed to initialize OpenAI client: {e}")
 
-# Initialize Ollama if available
-if OllamaProvider:
-    try:
-        ollama_provider = OllamaProvider()
-        logger.info("Ollama provider initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize Ollama provider: {e}")
+# ── Optional Services ──────────────────────────────────────────────────────────
+rag_service = None
 
 # Initialize RAG if available
 if RAGService:
@@ -92,7 +89,7 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    reply: str
+    response: str
     sources: List[dict] = []
     session_id: str
 
@@ -100,7 +97,7 @@ class ChatResponse(BaseModel):
 # ── Chat Endpoint (non-streaming) ────────────────────────────────────────────
 @app.post("/api/chat")
 async def api_chat(request: ChatRequest):
-    """Main chat endpoint with fallback support"""
+    """Main chat endpoint with OpenAI integration"""
     session_id = request.sessionId or str(uuid.uuid4())
     user_message = request.message
     
@@ -130,82 +127,35 @@ async def api_chat(request: ChatRequest):
     messages.extend(chat_sessions[session_id][-10:])  # last 10 for context
     messages.append({"role": "user", "content": user_message})
 
-    # 3. Try Ollama first, fallback to error message
-    if ollama_provider is None:
-        error_msg = "AI service is not available. Please check server configuration."
-        logger.error("Ollama provider not initialized")
-        return ChatResponse(reply=error_msg, sources=[], session_id=session_id)
+    # 3. Try OpenAI first, fallback to error message
+    if openai_client is None:
+        error_msg = "AI service is not available. Please check OPENAI_API_KEY environment variable."
+        logger.error("OpenAI client not initialized")
+        return ChatResponse(response=error_msg, sources=[], session_id=session_id)
 
     try:
-        model = request.model or os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
-        ollama_messages = [Message(role=m["role"], content=m["content"]) for m in messages]
+        model = request.model or "gpt-3.5-turbo"
         
-        parts = []
-        async for token in ollama_provider.generate_response(
-            messages=ollama_messages, model=model, stream=False
-        ):
-            parts.append(token)
-        full_reply = "".join(parts)
+        response = openai_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=150,
+            temperature=0.7,
+            timeout=30.0
+        )
+        
+        full_reply = response.choices[0].message.content.strip()
 
         # Save to history
         chat_sessions[session_id].append({"role": "user", "content": user_message})
         chat_sessions[session_id].append({"role": "assistant", "content": full_reply})
 
-        return ChatResponse(reply=full_reply, sources=[], session_id=session_id)
+        return ChatResponse(response=full_reply, sources=[], session_id=session_id)
         
     except Exception as e:
         logger.exception(f"Chat generation error: {e}")
         error_msg = f"Sorry, I encountered an error: {str(e)}"
-        return ChatResponse(reply=error_msg, sources=[], session_id=session_id)
-
-
-# ── Streaming Chat Endpoint ──────────────────────────────────────────────────
-@app.post("/api/chat/stream")
-async def api_chat_stream(request: ChatRequest):
-    """Streaming chat endpoint with fallback support"""
-    session_id = request.sessionId or str(uuid.uuid4())
-    user_message = request.message
-    
-    if session_id not in chat_sessions:
-        chat_sessions[session_id] = []
-
-    system_instr = (
-        "You are ConvoAI, a helpful assistant. "
-        "Answer concisely and accurately."
-    )
-
-    # Add RAG context if available
-    if rag_service and os.getenv("ENABLE_RAG", "0") == "1":
-        try:
-            relevant_chunks = rag_service.retrieve(user_message)
-            if relevant_chunks:
-                context_text = "\n\n".join(c["content"] for c in relevant_chunks)
-                system_instr += f"\n\nCONTEXT:\n{context_text}"
-        except Exception as e:
-            logger.warning(f"RAG retrieval failed: {e}")
-
-    messages = [{"role": "system", "content": system_instr}]
-    messages.extend(chat_sessions[session_id][-10:])
-    messages.append({"role": "user", "content": user_message})
-
-    async def stream_generator():
-        if ollama_provider is None:
-            yield 'data: {"error": "AI service is not available"}\n\n'
-            return
-            
-        try:
-            model = request.model or os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
-            ollama_messages = [Message(role=m["role"], content=m["content"]) for m in messages]
-            
-            async for token in ollama_provider.generate_streaming_response(
-                messages=ollama_messages, model=model
-            ):
-                yield token
-        except Exception as e:
-            logger.exception(f"Streaming error: {e}")
-            yield f'data: {{"error": "{str(e)}"}}\n\n'
-
-    return StreamingResponse(stream_generator(), media_type="text/event-stream")
+        return ChatResponse(response=error_msg, sources=[], session_id=session_id)
 
 
 # ── Health Check ──────────────────────────────────────────────────────────────
@@ -214,7 +164,7 @@ async def health_check():
     """Health check endpoint for monitoring"""
     return {
         "status": "ok",
-        "ollama_available": ollama_provider is not None,
+        "openai_available": openai_client is not None,
         "rag_available": rag_service is not None,
         "rag_enabled": os.getenv("ENABLE_RAG", "0") == "1",
         "timestamp": datetime.utcnow().isoformat(),
@@ -226,9 +176,9 @@ async def root():
     """Root endpoint with API info"""
     return {
         "message": "ConvoAI API is running. POST to /api/chat to chat.",
-        "endpoints": ["/api/chat", "/api/chat/stream", "/api/health"],
+        "endpoints": ["/api/chat", "/api/health"],
         "services": {
-            "ollama": ollama_provider is not None,
+            "openai": openai_client is not None,
             "rag": rag_service is not None
         }
     }
