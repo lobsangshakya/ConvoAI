@@ -2,7 +2,7 @@
 
 A beginner-friendly chatbot application with React frontend and FastAPI backend.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - **Node.js** (v14 or higher) - [Download](https://nodejs.org/)
@@ -39,9 +39,9 @@ npm start
 
 5. **Open app:** http://localhost:3000
 
-That's it! 🎉
+That's it!
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 ConvoAI/
@@ -63,7 +63,7 @@ ConvoAI/
 └── README.md
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
