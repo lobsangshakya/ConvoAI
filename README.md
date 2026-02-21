@@ -1,111 +1,81 @@
-# ConvoAI — Simple AI Chatbot
+# ConvoAI - Simple AI Chatbot
 
-A beginner-friendly chatbot with a **React** frontend and **FastAPI** backend, powered by [Ollama](https://ollama.ai) for local AI inference.
+A beginner-friendly chatbot application with React frontend and FastAPI backend.
 
-![React](https://img.shields.io/badge/React-18-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-Python-green) ![Ollama](https://img.shields.io/badge/Ollama-Local_AI-orange)
+## 🚀 Quick Start
 
----
+### Prerequisites
+- **Node.js** (v14 or higher) - [Download](https://nodejs.org/)
+- **Python 3.11** - [Download](https://python.org/)
+- **OpenAI API Key** - [Get yours](https://platform.openai.com/api-keys)
 
-## What Does This Project Do?
+### One-Command Setup
 
-You type a message → the React frontend sends it to the FastAPI backend → the backend forwards it to Ollama (a local AI model running on your machine) → and streams the response back in real time, just like ChatGPT.
-
-```
-┌──────────┐       ┌──────────┐       ┌──────────┐
-│  React   │ ───▶  │  FastAPI  │ ───▶  │  Ollama  │
-│ Frontend │ ◀───  │  Backend  │ ◀───  │  (AI)    │
-└──────────┘       └──────────┘       └──────────┘
- localhost:3000     localhost:8000     localhost:11434
-```
-
----
-
-## Prerequisites
-
-Make sure you have these installed:
-
-| Tool       | Version | How to install                          |
-| ---------- | ------- | --------------------------------------- |
-| **Node.js** | 18+     | [nodejs.org](https://nodejs.org)       |
-| **Python**  | 3.9+    | [python.org](https://python.org)       |
-| **Ollama**  | latest  | [ollama.ai](https://ollama.ai)         |
-
----
-
-## Quick Start (3 steps)
-
-### 1. Install Ollama and pull a model
-
+1. **Clone and setup:**
 ```bash
-# After installing Ollama from ollama.ai, pull a model:
-ollama pull qwen2.5:3b
-
-# Start the Ollama server (it may already be running):
-ollama serve
+git clone <your-repo>
+cd ChatBot
 ```
 
-### 2. Start the Backend
-
+2. **Configure environment:**
 ```bash
-# Open a terminal and run:
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+```
+
+3. **Start backend:**
+```bash
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-You should see: `Uvicorn running on http://127.0.0.1:8000`
-
-### 3. Start the Frontend
-
+4. **Start frontend** (in new terminal):
 ```bash
-# Open a NEW terminal and run:
 cd frontend
 npm install
 npm start
 ```
 
-Your browser will open `http://localhost:3000` — start chatting! 🎉
+5. **Open app:** http://localhost:3000
 
----
+That's it! 🎉
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 ConvoAI/
-├── backend/                 # Python FastAPI server
+├── backend/           # Python FastAPI server
 │   ├── app/
-│   │   ├── main.py          # API endpoints (/api/chat, /api/health)
-│   │   ├── ollama_provider.py  # Talks to Ollama
-│   │   └── rag_service.py   # (Optional) RAG for knowledge-base Q&A
-│   └── requirements.txt     # Python dependencies
-│
-├── frontend/                # React chat interface
+│   │   ├── main.py      # Main API with OpenAI
+│   │   └── __init__.py
+│   ├── requirements.txt
+│   └── runtime.txt        # Python 3.11.9 for Render
+├── frontend/          # React web app
 │   ├── src/
-│   │   ├── App.js           # Main chat component
-│   │   ├── App.css          # Styles
-│   │   └── index.js         # React entry point
-│   ├── public/index.html
+│   │   ├── App.js       # Main chat component
+│   │   └── index.js
+│   ├── public/
+│   │   └── index.html
 │   └── package.json
-│
-├── knowledge/               # (Optional) Drop .txt/.md files here for RAG
-│   └── sample.txt
-│
-├── .env                     # Your local config (not committed to git)
-├── .env.example             # Template — copy this to .env
-└── README.md                # You are here!
+├── knowledge/         # Optional RAG documents
+├── .env.example      # Environment template
+└── README.md
 ```
 
----
+## ⚙️ Configuration
 
-## Configuration
+### Environment Variables
 
-Copy `.env.example` to `.env` and adjust if needed:
+Create `.env` file from `.env.example`:
 
-```bash
-cp .env.example .env
-```
+```env
+# Backend (Required)
+OPENAI_API_KEY=your_openai_api_key_here
 
-| Variable             | Default                       | Description                        |
+# Optional
+PORT=8000
+ENABLE_RAG=0  # Set to 1 to enable RAG
 | -------------------- | ----------------------------- | ---------------------------------- |
 | `OLLAMA_BASE_URL`    | `http://127.0.0.1:11434`     | Where Ollama is running            |
 | `OLLAMA_MODEL`       | `qwen2.5:3b`                 | Which model to use                 |
