@@ -1,13 +1,8 @@
 fastapi
 uvicorn
 python-dotenv
-transformers
-torch
-tokenizers
-sentence-transformers
+httpx[http2]
 numpy
 faiss-cpu
-httpx[http2]
-kafka-python
-pydantic-settings
-accelerate
+pydantic
+sentence-transformers
