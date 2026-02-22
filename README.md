@@ -1,129 +1,243 @@
-# ConvoAI - Simple AI Chatbot
+# ConvoAI - Production-Ready AI Chatbot
 
-A beginner-friendly chatbot application with React frontend and FastAPI backend.
+A beginner-friendly chatbot application with React frontend and FastAPI backend, powered by Groq LLM API.
 
-## Quick Start
+## 🚀 What This Project Does
 
-### Prerequisites
+ConvoAI is a simple, production-ready chatbot that:
+- **React Frontend** - Modern, responsive chat interface
+- **FastAPI Backend** - Python API with Groq LLM integration  
+- **Groq LLM** - Fast AI responses using Llama models
+- **Session Management** - Maintains conversation context
+- **Render Ready** - Deploys cleanly to Render platform
+
+## 📋 Prerequisites
+
 - **Node.js** (v14 or higher) - [Download](https://nodejs.org/)
 - **Python 3.11** - [Download](https://python.org/)
-- **OpenAI API Key** - [Get yours](https://platform.openai.com/api-keys)
+- **Groq API Key** - [Get free key](https://console.groq.com/)
 
-### One-Command Setup
+## ⚡ Quick Start
 
-1. **Clone and setup:**
+### 1. Clone and Setup
 ```bash
-git clone git@github.com:lobsangshakya/ConvoAI.git
+git clone <your-repo>
 cd ChatBot
 ```
 
-2. **Configure environment:**
+### 2. Configure Environment
 ```bash
+# Copy environment template
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+
+# Edit .env and add your Groq API key
+# GROQ_API_KEY=gsk_your_api_key_here
 ```
 
-3. **Start backend:**
+### 3. Start Backend
 ```bash
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-4. **Start frontend** (in new terminal):
+### 4. Start Frontend (new terminal)
 ```bash
 cd frontend
 npm install
 npm start
 ```
 
-5. **Open app:** http://localhost:3000
+### 5. Open App
+Visit http://localhost:3000 and start chatting! 🎉
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 ConvoAI/
-├── backend/           # Python FastAPI server
+├── backend/                 # Python FastAPI server
 │   ├── app/
-│   │   ├── main.py      # Main API with OpenAI
+│   │   ├── main.py          # Main API endpoints
+│   │   ├── llm_service.py   # Groq LLM wrapper
 │   │   └── __init__.py
-│   ├── requirements.txt
-│   └── runtime.txt        # Python 3.11.9 for Render
-├── frontend/          # React web app
+│   ├── requirements.txt     # Python dependencies
+│   └── runtime.txt          # Python 3.11.9 for Render
+├── frontend/               # React web app
 │   ├── src/
-│   │   ├── App.js       # Main chat component
+│   │   ├── App.js          # Main chat component
+│   │   ├── App.css         # Chat styles
 │   │   └── index.js
 │   ├── public/
 │   │   └── index.html
 │   └── package.json
-├── knowledge/         # Optional RAG documents
-├── .env.example      # Environment template
+├── .env.example            # Environment template
 └── README.md
 ```
 
-## Configuration
+## ⚙️ Environment Variables
 
-### Environment Variables
-
-Create `.env` file from `.env.example`:
+Create `.env` from `.env.example`:
 
 ```env
-# Backend (Required)
-OPENAI_API_KEY=your_openai_api_key_here
+# Backend (Required for AI responses)
+GROQ_API_KEY=your_groq_api_key_here
 
-# Optional
+# Optional Backend Settings
 PORT=8000
-ENABLE_RAG=0  # Set to 1 to enable RAG
-| -------------------- | ----------------------------- | ---------------------------------- |
-| `OLLAMA_BASE_URL`    | `http://127.0.0.1:11434`     | Where Ollama is running            |
-| `OLLAMA_MODEL`       | `qwen2.5:3b`                 | Which model to use                 |
-| `OLLAMA_TIMEOUT`     | `60`                          | Request timeout in seconds         |
-| `ENABLE_RAG`         | `0`                           | Set to `1` to enable RAG           |
-| `REACT_APP_BACKEND_URL` | `http://localhost:8000`    | Backend URL for the frontend       |
+FRONTEND_ORIGIN=*
 
----
-
-## API Endpoints
-
-| Method | Endpoint           | Description                    |
-| ------ | ------------------ | ------------------------------ |
-| POST   | `/api/chat`        | Send a message, get a reply    |
-| POST   | `/api/chat/stream` | Send a message, get a streamed reply |
-| GET    | `/api/health`      | Check if the server is running |
-
-**Example request:**
-
-```bash
-curl -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello!"}'
+# Frontend Configuration
+REACT_APP_API_URL=http://localhost:8000
 ```
 
+### Getting Your Groq API Key
+
+1. Go to [console.groq.com](https://console.groq.com/)
+2. Sign up for free account
+3. Create new API key
+4. Copy key to your `.env` file
+
+## 🔧 API Endpoints
+
+### Backend API
+- `POST /api/chat` - Send chat message, get AI response
+- `GET /api/health` - Health check endpoint
+- `GET /` - API information
+
+### Example Usage
+```bash
+curl -X POST "http://localhost:8000/api/chat" \
+     -H "Content-Type: application/json" \
+     -d '{"message": "Hello, how are you?"}'
+```
+
+## 🎨 Features
+
+- ✅ **Clean React UI** - Modern, responsive chat interface
+- ✅ **Groq LLM Integration** - Fast AI responses with Llama models
+- ✅ **Session Management** - Maintains conversation context
+- ✅ **Error Handling** - Graceful fallbacks and user-friendly errors
+- ✅ **Production Ready** - Works on Render, Vercel, Netlify
+- ✅ **Simple Architecture** - No Kafka, no complex microservices
+
+## 🚀 Deployment
+
+### Render (Recommended)
+
+#### Backend Deployment
+1. **Connect GitHub repo** to Render
+2. **Set Environment Variables:**
+   - `GROQ_API_KEY` - Your Groq API key
+   - `PORT` - Render sets this automatically
+3. **Configure Service:**
+   - Root Directory: `backend`
+   - Build: `pip install -r requirements.txt`
+   - Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+
+#### Frontend Deployment
+1. **Connect same repo** to Vercel/Netlify
+2. **Set Environment Variable:**
+   - `REACT_APP_API_URL` - Your Render backend URL
+3. **Configure Build:**
+   - Root Directory: `frontend`
+   - Build: `npm install && npm run build`
+   - Publish: `build`
+
+### Environment Variables for Production
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GROQ_API_KEY` | ✅ | Your Groq API key |
+| `REACT_APP_API_URL` | ✅ | Backend URL for frontend |
+| `FRONTEND_ORIGIN` | ❌ | Allowed CORS origin (default: "*") |
+| `PORT` | ❌ | Backend port (Render sets automatically) |
+
+## 🛠️ Development
+
+### Running Locally
+
+#### Backend
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+#### Frontend
+```bash
+cd frontend
+npm install
+npm start
+```
+
+### Testing
+
+#### Backend Health Check
+```bash
+curl http://localhost:8000/api/health
+```
+
+#### Frontend Build
+```bash
+cd frontend
+npm run build
+```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+**1. "GROQ_API_KEY not set"**
+```bash
+# Make sure .env file exists with your API key
+cat .env
+```
+
+**2. "ModuleNotFoundError"**
+- ✅ **Fixed!** - Backend uses proper package structure
+
+**3. "Port already in use"**
+```bash
+# Kill existing processes
+lsof -ti:8000 | xargs kill -9
+```
+
+**4. "npm: command not found"**
+- Install Node.js from https://nodejs.org/
+
+**5. "python: command not found"**
+- Install Python 3.11 from https://python.org/
+
+**6. Frontend build fails**
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm run build
+```
+
+### Getting Help
+
+- Check backend logs: `uvicorn app.main:app --log-level debug`
+- Check browser console for frontend errors
+- Verify all environment variables are set
+- Make sure Groq API key is valid
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
 ---
 
-## Optional: RAG (Knowledge Base)
+**Need help?** Check the issues tab or create a new issue.
 
-Want the bot to answer questions using your own documents?
-
-1. Drop `.txt` or `.md` files into the `knowledge/` folder
-2. Set `ENABLE_RAG=1` in your `.env` file
-3. Restart the backend
-
-The bot will automatically read and index your documents on startup.
-
----
-
-## Troubleshooting
-
-| Problem                          | Solution                                            |
-| -------------------------------- | --------------------------------------------------- |
-| "Ollama is not available"       | Make sure Ollama is running: `ollama serve`          |
-| "Failed to fetch" in frontend   | Make sure the backend is running on port 8000        |
-| Slow first response             | First response is slower while the model loads       |
-| "Model not found"               | Pull the model first: `ollama pull qwen2.5:3b`      |
-
----
-
-## License
-
-MIT — see [LICENSE](./LICENSE) for details.
+**Made with ❤️ for beginners and production deployment**
