@@ -7,7 +7,7 @@ function App() {
     { id: 1, text: "Hello! I'm your AI assistant. How can I help you today?", sender: 'ai', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
   ]);
   const [loading, setLoading] = useState(false);
-  const [model, setModel] = useState('llama-3.1-8b-instant'); // Default model
+  const [model, setModel] = useState('qwen2.5:3b'); // Default model
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -118,7 +118,7 @@ function App() {
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="Model name (e.g., llama-3.1-8b-instant)"
+              placeholder="Model name (e.g., qwen2.5:3b)"
               className="model-input"
             />
           </div>
