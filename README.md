@@ -1,14 +1,42 @@
 # ConvoAI
 
-AI chatbot with React frontend and FastAPI backend powered by Groq LLM.
+AI chatbot with React frontend and FastAPI backend powered by local Ollama.
 
 ## Quick Start
 
-1. Clone repository
-2. Copy `.env.example` to `.env` and add your Groq API key
-3. Start backend: `cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8000`
-4. Start frontend: `cd frontend && npm install && npm start`
-5. Open http://localhost:3000
+### Prerequisites
+- Node.js (v14+)
+- Python 3.11
+- Ollama installed locally
+
+### 1. Install Ollama and Pull Model
+```bash
+# Install Ollama (macOS/Linux)
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull Qwen model
+ollama pull qwen2.5:3b
+
+# Start Ollama server
+ollama serve
+```
+
+### 2. Start Backend
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+### 3. Start Frontend (new terminal)
+```bash
+cd frontend
+npm install
+npm start
+```
+
+### 4. Open App
+Visit http://localhost:3000
 
 ## Project Structure
 
@@ -17,9 +45,10 @@ ConvoAI/
 ├── backend/                 # FastAPI server
 │   ├── app/
 │   │   ├── main.py          # API endpoints
-│   │   ├── llm_service.py   # Groq LLM wrapper
+│   │   ├── ollama_service.py # Ollama LLM wrapper
 │   │   └── __init__.py
 │   ├── requirements.txt
+│   ├── Dockerfile
 │   └── runtime.txt
 ├── frontend/               # React app
 │   ├── src/
@@ -27,7 +56,10 @@ ConvoAI/
 │   │   ├── App.css
 │   │   └── index.js
 │   ├── public/
+│   ├── Dockerfile
 │   └── package.json
+├── docker-compose.yml
+├── knowledge/              # Optional RAG documents
 └── .env.example
 ```
 
@@ -36,19 +68,25 @@ ConvoAI/
 Create `.env` file:
 
 ```env
-GROQ_API_KEY=your_groq_api_key_here
+# Backend Configuration
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_TIMEOUT=60
 PORT=8000
 FRONTEND_ORIGIN=*
+
+# Optional RAG Configuration
+ENABLE_RAG=0
+
+# Frontend Configuration
 REACT_APP_API_URL=http://localhost:8000
 ```
-
-Get API key from https://console.groq.com/
 
 ## API Endpoints
 
 - `POST /api/chat` - Send message, get AI response
+- `POST /api/chat/stream` - Streaming chat response
 - `GET /api/health` - Health check
-- `GET /` - API info
 
 Example:
 ```bash
@@ -57,21 +95,35 @@ curl -X POST "http://localhost:8000/api/chat" \
      -d '{"message": "Hello"}'
 ```
 
-## Deployment
+## Docker Setup
 
-### Backend (Render)
+### Using Docker Compose
 
-- Root Directory: `backend`
-- Build: `pip install -r requirements.txt`
-- Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-- Environment Variables: `GROQ_API_KEY`
+1. Ensure Ollama is running on host:
+```bash
+ollama serve
+```
 
-### Frontend (Vercel/Netlify)
+2. Start application:
+```bash
+docker-compose up --build
+```
 
-- Root Directory: `frontend`
-- Build: `npm install && npm run build`
-- Publish: `build`
-- Environment Variables: `REACT_APP_API_URL` (your backend URL)
+### Manual Docker Build
+
+Backend:
+```bash
+cd backend
+docker build -t convoai-backend .
+docker run -p 8000:8000 convoai-backend
+```
+
+Frontend:
+```bash
+cd frontend
+docker build -t convoai-frontend .
+docker run -p 3000:3000 convoai-frontend
+```
 
 ## Development
 
@@ -97,9 +149,18 @@ npm run build
 
 ## Troubleshooting
 
-- "GROQ_API_KEY not set": Add API key to `.env`
+- "Ollama not available": Make sure `ollama serve` is running
+- "Model not found": Run `ollama pull qwen2.5:3b`
 - "Port already in use": `lsof -ti:8000 | xargs kill -9`
 - Build fails: `rm -rf node_modules package-lock.json && npm install`
+
+## Optional RAG
+
+To enable knowledge base:
+
+1. Add documents to `knowledge/` folder
+2. Set `ENABLE_RAG=1` in `.env`
+3. Restart backend
 
 ## License
 
