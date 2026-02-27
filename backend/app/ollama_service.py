@@ -52,6 +52,10 @@ class OllamaService:
         try:
             model = model or self.default_model
             
+            # Check if user wants points format
+            user_message = messages[-1].get("content", "").lower() if messages else ""
+            wants_points = any(keyword in user_message for keyword in ["points", "in points", "bullet points", "point form"])
+            
             # Convert messages to Ollama format
             ollama_messages = []
             for msg in messages:
@@ -63,6 +67,16 @@ class OllamaService:
                     ollama_messages.append({"role": "user", "content": content})
                 elif role == "assistant":
                     ollama_messages.append({"role": "assistant", "content": content})
+            
+            # Modify system prompt if user wants points
+            if wants_points:
+                system_prompt = "You are ConvoAI, a helpful assistant. When the user asks for information 'in points', 'bullet points', or 'point form', format your response as a numbered list with clear, concise points. Each point should start with a number and a brief description."
+                
+                # Update or add system message
+                if ollama_messages and ollama_messages[0].get("role") == "system":
+                    ollama_messages[0]["content"] = system_prompt
+                else:
+                    ollama_messages.insert(0, {"role": "system", "content": system_prompt})
             
             payload = {
                 "model": model,
@@ -82,7 +96,14 @@ class OllamaService:
                 
                 if response.status_code == 200:
                     result = response.json()
-                    return result.get("message", {}).get("content", "").strip()
+                    raw_response = result.get("message", {}).get("content", "").strip()
+                    
+                    # Post-process to ensure points format if requested
+                    if wants_points and not any(raw_response.strip().startswith(str(i)) for i in range(1, 10)):
+                        # Convert to points if not already in point format
+                        return self._convert_to_points(raw_response)
+                    
+                    return raw_response
                 else:
                     logger.error(f"Ollama API error: {response.status_code} - {response.text}")
                     return self._get_error_response(f"HTTP {response.status_code}")
@@ -110,6 +131,10 @@ class OllamaService:
         try:
             model = model or self.default_model
             
+            # Check if user wants points format
+            user_message = messages[-1].get("content", "").lower() if messages else ""
+            wants_points = any(keyword in user_message for keyword in ["points", "in points", "bullet points", "point form"])
+            
             # Convert messages to Ollama format
             ollama_messages = []
             for msg in messages:
@@ -122,6 +147,16 @@ class OllamaService:
                 elif role == "assistant":
                     ollama_messages.append({"role": "assistant", "content": content})
             
+            # Modify system prompt if user wants points
+            if wants_points:
+                system_prompt = "You are ConvoAI, a helpful assistant. When the user asks for information 'in points', 'bullet points', or 'point form', format your response as a numbered list with clear, concise points. Each point should start with a number and a brief description."
+                
+                # Update or add system message
+                if ollama_messages and ollama_messages[0].get("role") == "system":
+                    ollama_messages[0]["content"] = system_prompt
+                else:
+                    ollama_messages.insert(0, {"role": "system", "content": system_prompt})
+            
             payload = {
                 "model": model,
                 "messages": ollama_messages,
@@ -132,6 +167,7 @@ class OllamaService:
                 }
             }
             
+            full_response = ""
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 async with client.stream(
                     "POST", 
@@ -149,7 +185,9 @@ class OllamaService:
                                             import json
                                             chunk = json.loads(data)
                                             if "message" in chunk and "content" in chunk["message"]:
-                                                yield chunk["message"]["content"]
+                                                content = chunk["message"]["content"]
+                                                full_response += content
+                                                yield content
                                 except json.JSONDecodeError:
                                     continue
                                 except Exception as e:
@@ -159,6 +197,9 @@ class OllamaService:
                         logger.error(f"Ollama streaming error: {response.status_code}")
                         yield self._get_error_response(f"HTTP {response.status_code}")
                         return
+            
+            # Post-process for points if needed (streaming doesn't support this well)
+            # For streaming, we rely on the system prompt to guide the model
                         
         except Exception as e:
             logger.error(f"Ollama streaming error: {e}")
@@ -176,6 +217,29 @@ class OllamaService:
     def _get_error_response(self, error: str) -> str:
         """Return error response"""
         return f"Sorry, I encountered an error: {error}. Please try again."
+    
+    def _convert_to_points(self, text: str) -> str:
+        """Convert text to numbered points format"""
+        # Split by sentences or common delimiters
+        sentences = [s.strip() for s in text.replace('\n', '. ').split('. ') if s.strip()]
+        
+        # Filter out very short sentences
+        sentences = [s for s in sentences if len(s) > 10]
+        
+        # Convert to numbered points
+        points = []
+        for i, sentence in enumerate(sentences[:8], 1):  # Limit to 8 points
+            # Remove leading conjunctions and articles
+            cleaned = sentence
+            if cleaned.lower().startswith(('and ', 'but ', 'so ', 'also ', 'the ', 'a ', 'an ')):
+                cleaned = cleaned.split(' ', 1)[1] if ' ' in cleaned else cleaned
+            
+            # Capitalize first letter
+            cleaned = cleaned[0].upper() + cleaned[1:] if cleaned else cleaned
+            
+            points.append(f"{i}. {cleaned}")
+        
+        return '\n'.join(points) if points else text
     
     def get_default_model(self) -> str:
         """Get default Ollama model"""
